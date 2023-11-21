@@ -38,14 +38,20 @@ pub enum Report {
     /// Energie belastingcluster per meter
     Belastingcluster,
 
-    /// Tussenmeters
-    Tussenmeter,
-
     /// Gebouwen
     Gebouwen,
 
     /// Meet- en infradiensten
     MeetEnInfra,
+
+    /// Aansluiting metadata
+    Metadata,
+
+    /// Meterstanden
+    Meterstanden,
+
+    /// Tussenmeters
+    Tussenmeter,
 }
 
 impl Report {
@@ -56,17 +62,19 @@ impl Report {
             Self::Belastingcluster => {
                 "https://www.dbenergie.nl/Connections/List/ExportTaxationCluster"
             }
+            Self::Gebouwen => "https://www.dbenergie.nl/Buildings/List/ExportList",
+            Self::MeetEnInfra => "https://www.dbenergie.nl/Report/MeteringServices/ExportList",
+            Self::Metadata => "https://www.dbenergie.nl/Connections/List/ExportMetaData",
+            Self::Meterstanden => "https://www.dbenergie.nl/Connections/List/ExportMeterReading",
             Self::Tussenmeter => {
                 "https://www.dbenergie.nl/Connections/IntermediateMeter/ExportList"
             }
-            Self::Gebouwen => "https://www.dbenergie.nl/Buildings/List/ExportList",
-            Self::MeetEnInfra => "https://www.dbenergie.nl/Report/MeteringServices/ExportList",
         }
     }
 
     /// Checks for the latest version of the report and returns it's filename.
     ///
-    /// # Panics
+    /// # Returns an error
     /// - If the url corresponding to the Report is invalid.
     /// - If the cookie isn't a valid header value.
     /// - If the request failed
@@ -87,6 +95,9 @@ impl Report {
         request
             .headers_mut()
             .insert("Cookie", HeaderValue::from_str(cookies)?);
+        request
+            .headers_mut()
+            .insert("request", HeaderValue::from_str("MjAyMw==")?);
 
         // Send the request
         let response = client.execute(request).await?;
@@ -112,7 +123,7 @@ impl Report {
 
     /// Downloads the requested version.
     ///
-    /// # Panics
+    /// # Returns an error
     /// - If the Url couldn't be created with the requested version
     /// - If the cookie isn't a valid header value
     /// - If the request failed
@@ -160,9 +171,9 @@ impl Report {
 
     /// Downloads the latest version of the report
     ///
-    /// # Panics
-    /// - If requesting the latest version panics
-    /// - If downloading the version panics
+    /// # Returns an error
+    /// - If requesting the latest version returns an error
+    /// - If downloading the version returns an error
     pub async fn download_latest_version(
         &self,
         client: &Client,
