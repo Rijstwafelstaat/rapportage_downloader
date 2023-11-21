@@ -15,9 +15,12 @@ Voor de volgende rapportages is nog meer werk nodig:
 - Metadata
 - verbruik (per product)
 - Verbruik (in MJ of CO2)
+- Datacompleetheid
+- Datakwaliteitsrapportage
 
 De volgende rapportages zijn niet downloadbaar:
 - Energie analyse
 - Energie analyse - extern
+- Meetdata Export
 
 De cookies zijn maar tijdelijk geldig en verlopen zelfs direct als degene die de cookies ontvangen heeft uitlogt. Dit kan opgelost worden door de applicatie in te laten loggen en zo de benodigde cookies te verkrijgen. Dit is tot nu toe moeilijker gebleken dan verwacht.
