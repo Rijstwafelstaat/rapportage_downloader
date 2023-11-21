@@ -37,6 +37,15 @@ pub enum Report {
 
     /// Energie belastingcluster per meter
     Belastingcluster,
+
+    /// Tussenmeters
+    Tussenmeter,
+
+    /// Gebouwen
+    Gebouwen,
+
+    /// Meet- en infradiensten
+    MeetEnInfra,
 }
 
 impl Report {
@@ -47,6 +56,11 @@ impl Report {
             Self::Belastingcluster => {
                 "https://www.dbenergie.nl/Connections/List/ExportTaxationCluster"
             }
+            Self::Tussenmeter => {
+                "https://www.dbenergie.nl/Connections/IntermediateMeter/ExportList"
+            }
+            Self::Gebouwen => "https://www.dbenergie.nl/Buildings/List/ExportList",
+            Self::MeetEnInfra => "https://www.dbenergie.nl/Report/MeteringServices/ExportList",
         }
     }
 
