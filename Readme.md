@@ -8,14 +8,14 @@ Je kan de applicatie compileren met `cargo build` of `cargo run` met eventueel d
 Je kan de binary direct runnen in de terminal of met het `cargo run` command. Bij het runnen moeten de path naar een bestand met de cookies en de benodigde rapportage meegegeven worden. De path naar het bestand met cookies dient meegegeven te worden met de `-c` of `--cookie` flag. De rapportage dient meegegevent te worden met de `-r` of `--report` flag. De volgende rapportages zijn op dit moment downloadbaar:
 - `aansluitinglijst`: Energie aansluitingenlijst
 - `belastingcluster`: Energie belastingcluster per meter
-- `tussenmeter`: Tussenmeters
 - `gebouwen`: Gebouwen
 - `meet-en-infra`: Meet- en infradiensten
+- `metadata`: Aansluiting metadata
+- `meterstanden`: Meterstanden van het huidige jaar
+- `tussenmeter`: Tussenmeters
 ## Todo
 Voor de volgende rapportages is nog meer werk nodig:
-- Meterstanden
-- Verbruiks notities
-- Metadata
+- meterstanden van vorige jaren
 - verbruik (per product)
 - Verbruik (in MJ of CO2)
 - Datacompleetheid
@@ -25,5 +25,8 @@ De volgende rapportages zijn niet downloadbaar:
 - Energie analyse
 - Energie analyse - extern
 - Meetdata Export
+
+Werkt niet op de site:
+- Verbruiks notities
 
 De cookies zijn maar tijdelijk geldig en verlopen zelfs direct als degene die de cookies ontvangen heeft uitlogt. Dit kan opgelost worden door de applicatie in te laten loggen en zo de benodigde cookies te verkrijgen. Dit is tot nu toe moeilijker gebleken dan verwacht.
