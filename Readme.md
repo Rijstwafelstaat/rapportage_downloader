@@ -9,9 +9,15 @@ Je kan de binary direct runnen in de terminal of met het `cargo run` command. Bi
 - `Aansluitinglijst`: Energie aansluitingenlijst
 - `Belastingcluster`: Energie belastingcluster per meter
 ## Todo
-Voor de volgende rapportages is nog meer informatie nodig:
+Voor de volgende rapportages is nog meer werk nodig:
 - Meterstanden
 - Verbruiks notities
 - Metadata
+- verbruik (per product)
+- Verbruik (in MJ of CO2)
+
+De volgende rapportages zijn niet downloadbaar:
+- Energie analyse
+- Energie analyse - extern
 
 De cookies zijn maar tijdelijk geldig en verlopen zelfs direct als degene die de cookies ontvangen heeft uitlogt. Dit kan opgelost worden door de applicatie in te laten loggen en zo de benodigde cookies te verkrijgen. Dit is tot nu toe moeilijker gebleken dan verwacht.

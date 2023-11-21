@@ -37,6 +37,11 @@ pub enum Report {
 
     /// Energie belastingcluster per meter
     Belastingcluster,
+
+    VerbruikPerProduct,
+    VerbruikInMjOfCo2,
+    EnergieAnalyse,
+    EnergieAnalyseExtern,
 }
 
 impl Report {
@@ -47,6 +52,10 @@ impl Report {
             Self::Belastingcluster => {
                 "https://www.dbenergie.nl/Connections/List/ExportTaxationCluster"
             }
+            Self::VerbruikPerProduct => "https://www.dbenergie.nl/Report/Consumption/GetDownload",
+            Self::VerbruikInMjOfCo2 => "https://www.dbenergie.nl/Report/Co2/GetDownload",
+            Self::EnergieAnalyse => todo!(),
+            Self::EnergieAnalyseExtern => todo!(),
         }
     }
 
