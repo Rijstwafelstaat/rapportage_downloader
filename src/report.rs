@@ -94,16 +94,18 @@ impl Report {
         // Add the cookie
         request
             .headers_mut()
-            .insert("Cookie", HeaderValue::from_str(cookies)?);
+            .insert(reqwest::header::COOKIE, HeaderValue::from_str(cookies)?);
         request
             .headers_mut()
             .insert("request", HeaderValue::from_str("MjAyMw==")?);
 
         // Send the request
         let response = client.execute(request).await?;
+        println!("{response:?}\n");
 
         // Turn the response body (payload) into a string
         let body = String::from_utf8(response.bytes().await?.into_iter().collect::<Vec<u8>>())?;
+        println!("{body}");
 
         // Convert the response body into json
         let body: serde_json::Value = serde_json::from_str(&body)?;
@@ -147,7 +149,7 @@ impl Report {
         // Add the cookie
         request
             .headers_mut()
-            .insert("Cookie", HeaderValue::from_str(cookies)?);
+            .insert(reqwest::header::COOKIE, HeaderValue::from_str(cookies)?);
 
         // Send the request
         let response = client.execute(request).await?;
