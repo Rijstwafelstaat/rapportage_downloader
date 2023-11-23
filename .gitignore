@@ -1,3 +1,5 @@
 /target
 *.xlsx
 cookies.txt
+perf.data*
+flamegraph.svg
