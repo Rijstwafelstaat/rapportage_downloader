@@ -9,7 +9,7 @@ mod login;
 mod report;
 
 #[derive(Parser)]
-struct Args {
+pub struct Args {
     /// The email to use to login at DB Energie
     #[arg(short, long)]
     mail: String,
