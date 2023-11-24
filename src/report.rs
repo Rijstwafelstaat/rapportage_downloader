@@ -5,10 +5,6 @@ use reqwest::{
     Client, Method, Request, Url,
 };
 use thiserror::Error;
-use tokio::{
-    fs,
-    io::{self as rust_io, BufWriter},
-};
 
 #[derive(Debug, Error)]
 pub enum ReportError {
@@ -92,11 +88,9 @@ impl Report {
 
         // Send the request
         let response = client.execute(request).await?;
-        println!("{response:?}\n");
 
         // Turn the response body (payload) into a string
         let body = String::from_utf8(response.bytes().await?.into_iter().collect::<Vec<u8>>())?;
-        println!("{body}");
 
         // Convert the response body into json
         let body: serde_json::Value = serde_json::from_str(&body)?;
@@ -127,29 +121,16 @@ impl Report {
         &self,
         client: &Client,
         filename: &str,
-    ) -> Result<(), ReportError> {
+    ) -> Result<Vec<u8>, ReportError> {
         // Create a request for the file
         let response = client
-            .get("https://www.dbenergie.nl/Global/Download?fileName={filename}")
+            .get(format!(
+                "https://www.dbenergie.nl/Global/Download?fileName={filename}"
+            ))
             .send()
             .await?;
 
-        // Send the request
-        // Create a file to write the content to
-        let mut file = BufWriter::new(fs::File::create(filename).await?);
-
-        // Copy the payload of the response to the file
-        rust_io::copy(
-            &mut response
-                .bytes()
-                .await?
-                .into_iter()
-                .collect::<Vec<u8>>()
-                .as_slice(),
-            &mut file,
-        )
-        .await?;
-        Ok(())
+        Ok(response.bytes().await?.into_iter().collect::<Vec<u8>>())
     }
 
     /// Downloads the latest version of the report
@@ -157,12 +138,15 @@ impl Report {
     /// # Returns an error
     /// - If requesting the latest version returns an error
     /// - If downloading the version returns an error
-    pub async fn download_latest_version(&self, client: &Client) -> Result<(), ReportError> {
+    pub async fn download_latest_version(
+        &self,
+        client: &Client,
+    ) -> Result<(String, Vec<u8>), ReportError> {
         // Request the latest version
         let latest_version = self.latest_version(client).await?;
 
         // Download the version
-        self.download_version(client, &latest_version).await?;
-        Ok(())
+        let response = self.download_version(client, &latest_version).await?;
+        Ok((latest_version, response))
     }
 }
