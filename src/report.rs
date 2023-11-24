@@ -6,6 +6,7 @@ use reqwest::{
 };
 use thiserror::Error;
 
+/// Errors that can occur while downloading a report
 #[derive(Debug, Error)]
 pub enum ReportError {
     InvalidUrl(#[from] url::ParseError),
@@ -25,6 +26,7 @@ impl Display for ReportError {
     }
 }
 
+/// The available report types
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
 pub enum Report {
     /// Energie aansluitingenlijst
@@ -68,6 +70,7 @@ impl Report {
     }
 
     /// Checks for the latest version of the report and returns it's filename.
+    /// The client should contain the required cookies.
     ///
     /// # Returns an error
     /// - If the url corresponding to the Report is invalid.
@@ -109,6 +112,8 @@ impl Report {
     }
 
     /// Downloads the requested version.
+    /// The client should contain the required cookies.
+    /// The filename is the version of the report that should be downloaded.
     ///
     /// # Returns an error
     /// - If the Url couldn't be created with the requested version
@@ -133,7 +138,8 @@ impl Report {
         Ok(response.bytes().await?.into_iter().collect::<Vec<u8>>())
     }
 
-    /// Downloads the latest version of the report
+    /// Downloads the latest version of the report.
+    /// The client should contain the required cookies.
     ///
     /// # Returns an error
     /// - If requesting the latest version returns an error

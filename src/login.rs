@@ -8,6 +8,7 @@ use thiserror::Error;
 
 use crate::Args;
 
+/// Errors that can happen during log in
 #[derive(Debug, Error)]
 pub enum LoginError {
     FailedRequest(#[from] reqwest::Error),
@@ -23,6 +24,7 @@ impl std::fmt::Display for LoginError {
     }
 }
 
+/// Retrieve the verification token from the website
 async fn get_verification_token(client: &Client) -> Result<String, LoginError> {
     // Get the login page
     let response = client
@@ -52,6 +54,8 @@ async fn get_verification_token(client: &Client) -> Result<String, LoginError> {
         .to_owned())
 }
 
+/// Logs in to the DB Energie website.
+/// The client should save the cookies automatically.
 pub async fn login(client: &Client, args: &Args) -> Result<(), LoginError> {
     // Create the login data
     let login_data = [
