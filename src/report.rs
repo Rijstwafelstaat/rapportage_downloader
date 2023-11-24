@@ -1,4 +1,3 @@
-#![warn(clippy::unwrap_used, clippy::expect_used)]
 use std::{fmt::Display, io as std_io, str::FromStr, string::FromUtf8Error};
 
 use reqwest::{
@@ -6,11 +5,8 @@ use reqwest::{
     Client, Method, Request, Url,
 };
 use thiserror::Error;
-use tokio::{
-    fs,
-    io::{self as rust_io, BufWriter},
-};
 
+/// Errors that can occur while downloading a report
 #[derive(Debug, Error)]
 pub enum ReportError {
     InvalidUrl(#[from] url::ParseError),
@@ -30,6 +26,7 @@ impl Display for ReportError {
     }
 }
 
+/// The available report types
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
 pub enum Report {
     /// Energie aansluitingenlijst
@@ -73,6 +70,7 @@ impl Report {
     }
 
     /// Checks for the latest version of the report and returns it's filename.
+    /// The client should contain the required cookies.
     ///
     /// # Returns an error
     /// - If the url corresponding to the Report is invalid.
@@ -83,18 +81,10 @@ impl Report {
     /// - If the response body wasn't a json object
     /// - If the response body didn't contain a fileName
     /// - If the fileName isn't a string
-    pub async fn latest_version(
-        &self,
-        client: &Client,
-        cookies: &str,
-    ) -> Result<String, ReportError> {
+    pub async fn latest_version(&self, client: &Client) -> Result<String, ReportError> {
         // Create a get request for the report
         let mut request = Request::new(Method::GET, Url::from_str(self.url())?);
 
-        // Add the cookie
-        request
-            .headers_mut()
-            .insert("Cookie", HeaderValue::from_str(cookies)?);
         request
             .headers_mut()
             .insert("request", HeaderValue::from_str("MjAyMw==")?);
@@ -122,6 +112,8 @@ impl Report {
     }
 
     /// Downloads the requested version.
+    /// The client should contain the required cookies.
+    /// The filename is the version of the report that should be downloaded.
     ///
     /// # Returns an error
     /// - If the Url couldn't be created with the requested version
@@ -133,43 +125,21 @@ impl Report {
     pub async fn download_version(
         &self,
         client: &Client,
-        cookies: &str,
         filename: &str,
-    ) -> Result<(), ReportError> {
+    ) -> Result<Vec<u8>, ReportError> {
         // Create a request for the file
-        let mut request = Request::new(
-            Method::GET,
-            Url::from_str(&format!(
+        let response = client
+            .get(format!(
                 "https://www.dbenergie.nl/Global/Download?fileName={filename}"
-            ))?,
-        );
+            ))
+            .send()
+            .await?;
 
-        // Add the cookie
-        request
-            .headers_mut()
-            .insert("Cookie", HeaderValue::from_str(cookies)?);
-
-        // Send the request
-        let response = client.execute(request).await?;
-
-        // Create a file to write the content to
-        let mut file = BufWriter::new(fs::File::create(filename).await?);
-
-        // Copy the payload of the response to the file
-        rust_io::copy(
-            &mut response
-                .bytes()
-                .await?
-                .into_iter()
-                .collect::<Vec<u8>>()
-                .as_slice(),
-            &mut file,
-        )
-        .await?;
-        Ok(())
+        Ok(response.bytes().await?.into_iter().collect::<Vec<u8>>())
     }
 
-    /// Downloads the latest version of the report
+    /// Downloads the latest version of the report.
+    /// The client should contain the required cookies.
     ///
     /// # Returns an error
     /// - If requesting the latest version returns an error
@@ -177,14 +147,12 @@ impl Report {
     pub async fn download_latest_version(
         &self,
         client: &Client,
-        cookies: &str,
-    ) -> Result<(), ReportError> {
+    ) -> Result<(String, Vec<u8>), ReportError> {
         // Request the latest version
-        let latest_version = self.latest_version(client, cookies).await?;
+        let latest_version = self.latest_version(client).await?;
 
         // Download the version
-        self.download_version(client, cookies, &latest_version)
-            .await?;
-        Ok(())
+        let response = self.download_version(client, &latest_version).await?;
+        Ok((latest_version, response))
     }
 }
