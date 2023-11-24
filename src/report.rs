@@ -1,4 +1,3 @@
-#![warn(clippy::unwrap_used, clippy::expect_used)]
 use std::{fmt::Display, io as std_io, str::FromStr, string::FromUtf8Error};
 
 use reqwest::{
@@ -83,18 +82,10 @@ impl Report {
     /// - If the response body wasn't a json object
     /// - If the response body didn't contain a fileName
     /// - If the fileName isn't a string
-    pub async fn latest_version(
-        &self,
-        client: &Client,
-        cookies: &str,
-    ) -> Result<String, ReportError> {
+    pub async fn latest_version(&self, client: &Client) -> Result<String, ReportError> {
         // Create a get request for the report
         let mut request = Request::new(Method::GET, Url::from_str(self.url())?);
 
-        // Add the cookie
-        request
-            .headers_mut()
-            .insert(reqwest::header::COOKIE, HeaderValue::from_str(cookies)?);
         request
             .headers_mut()
             .insert("request", HeaderValue::from_str("MjAyMw==")?);
@@ -135,25 +126,15 @@ impl Report {
     pub async fn download_version(
         &self,
         client: &Client,
-        cookies: &str,
         filename: &str,
     ) -> Result<(), ReportError> {
         // Create a request for the file
-        let mut request = Request::new(
-            Method::GET,
-            Url::from_str(&format!(
-                "https://www.dbenergie.nl/Global/Download?fileName={filename}"
-            ))?,
-        );
-
-        // Add the cookie
-        request
-            .headers_mut()
-            .insert(reqwest::header::COOKIE, HeaderValue::from_str(cookies)?);
+        let response = client
+            .get("https://www.dbenergie.nl/Global/Download?fileName={filename}")
+            .send()
+            .await?;
 
         // Send the request
-        let response = client.execute(request).await?;
-
         // Create a file to write the content to
         let mut file = BufWriter::new(fs::File::create(filename).await?);
 
@@ -176,17 +157,12 @@ impl Report {
     /// # Returns an error
     /// - If requesting the latest version returns an error
     /// - If downloading the version returns an error
-    pub async fn download_latest_version(
-        &self,
-        client: &Client,
-        cookies: &str,
-    ) -> Result<(), ReportError> {
+    pub async fn download_latest_version(&self, client: &Client) -> Result<(), ReportError> {
         // Request the latest version
-        let latest_version = self.latest_version(client, cookies).await?;
+        let latest_version = self.latest_version(client).await?;
 
         // Download the version
-        self.download_version(client, cookies, &latest_version)
-            .await?;
+        self.download_version(client, &latest_version).await?;
         Ok(())
     }
 }
