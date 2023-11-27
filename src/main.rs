@@ -79,7 +79,9 @@ async fn main() {
         .expect("Failed to create client");
 
     // Log in to receive a cookie
-    login::login(&client, &args).await.expect("Login failed");
+    login::login(&client, &args.mail, &args.password)
+        .await
+        .expect("Login failed");
 
     // Download the latest version of the requested report
     let (filename, response) = args

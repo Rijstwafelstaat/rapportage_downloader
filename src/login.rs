@@ -4,28 +4,25 @@ use std::str::Utf8Error;
 
 use reqwest::Client;
 use scraper::error::SelectorErrorKind;
-use thiserror::Error;
-
-use crate::Args;
 
 /// Errors that can happen during log in
-#[derive(Debug, Error)]
-pub enum LoginError {
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
     FailedRequest(#[from] reqwest::Error),
     MissingVerificationToken,
     TokenHasNoValue,
-    Utf8Error(#[from] Utf8Error),
+    Utf8(#[from] Utf8Error),
     InvalidTokenSelector(#[from] SelectorErrorKind<'static>),
 }
 
-impl std::fmt::Display for LoginError {
+impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{self:?}")
     }
 }
 
 /// Retrieve the verification token from the website
-async fn get_verification_token(client: &Client) -> Result<String, LoginError> {
+async fn get_verification_token(client: &Client) -> Result<String, Error> {
     // Get the login page
     let response = client
         .get("https://www.dbenergie.nl/Authorization/Login/Default")
@@ -48,19 +45,22 @@ async fn get_verification_token(client: &Client) -> Result<String, LoginError> {
     Ok(login_page
         .select(&token_selector)
         .next()
-        .ok_or(LoginError::MissingVerificationToken)?
+        .ok_or(Error::MissingVerificationToken)?
         .attr("value")
-        .ok_or(LoginError::TokenHasNoValue)?
+        .ok_or(Error::TokenHasNoValue)?
         .to_owned())
 }
 
 /// Logs in to the DB Energie website.
 /// The client should save the cookies automatically.
-pub async fn login(client: &Client, args: &Args) -> Result<(), LoginError> {
+///
+/// # Errors
+/// Returns an error if the verification token couldn't be retrieved or the login form couldn't be send.
+pub async fn login(client: &Client, mail: &str, password: &str) -> Result<(), Error> {
     // Create the login data
     let login_data = [
-        ("user[emailAddress]", &args.mail),
-        ("user[passWord]", &args.password),
+        ("user[emailAddress]", mail),
+        ("user[passWord]", password),
         (
             "__RequestVerificationToken",
             &get_verification_token(client).await?,

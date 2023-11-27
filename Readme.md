@@ -8,18 +8,20 @@ Je kan de applicatie compileren met `cargo build` of `cargo run` met eventueel d
 Je kan de binary direct runnen in de terminal of met het `cargo run` command. Bij het runnen moeten een email-adres, wachtwoord en de benodigde rapportage meegegeven worden. Het email-adres en wachtwoord moeten hetzelfde zijn als die je gebruikt om bij DB Energie in te loggen. De rapportage dient meegegevent te worden met de `-r` of `--report` flag. De volgende rapportages zijn op dit moment downloadbaar:
 - `aansluitinglijst`: Energie aansluitingenlijst
 - `belastingcluster`: Energie belastingcluster per meter
+- `co2`: Verbruik (in CO2)
+- `datakwaliteit`: Datakwaliteits rapportage
 - `gebouwen`: Gebouwen
 - `meet-en-infra`: Meet- en infradiensten
 - `metadata`: Aansluiting metadata
 - `meterstanden`: Meterstanden van het huidige jaar
+- `mj` Verbruik (in MJ)
 - `tussenmeter`: Tussenmeters
+- `verbruik`: verbruik (per product)
 ## Todo
 Voor de volgende rapportages is nog meer werk nodig:
-- meterstanden van vorige jaren
-- verbruik (per product)
-- Verbruik (in MJ of CO2)
-- Datacompleetheid
-- Datakwaliteitsrapportage
+- meterstanden buiten 2023
+- Datakwaliteits rapportage buiten november 2023
+- Verbruik rapportages buiten 2023
 
 De volgende rapportages zijn niet downloadbaar:
 - Energie analyse
@@ -27,4 +29,5 @@ De volgende rapportages zijn niet downloadbaar:
 - Meetdata Export
 
 Werkt niet op de site:
+- Datacompleetheid
 - Verbruiks notities
