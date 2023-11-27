@@ -34,6 +34,12 @@ pub enum Report {
     /// Energie belastingcluster per meter
     Belastingcluster,
 
+    /// CO2 verbruiks rapportage
+    Co2,
+
+    /// Datakwaliteits rapportage
+    Datakwaliteit,
+
     /// Gebouwen
     Gebouwen,
 
@@ -46,8 +52,14 @@ pub enum Report {
     /// Meterstanden
     Meterstanden,
 
+    /// MJ verbruiks rapportage
+    Mj,
+
     /// Tussenmeters
     Tussenmeter,
+
+    /// Verbruiksrapportage per product
+    Verbruik,
 }
 
 impl Report {
@@ -59,6 +71,10 @@ impl Report {
             Self::Belastingcluster => {
                 "https://www.dbenergie.nl/Connections/List/ExportTaxationCluster"
             }
+            Self::Co2 | Self::Mj => "https://www.dbenergie.nl/Report/Co2/GetDownload",
+            Self::Datakwaliteit => {
+                "https://www.dbenergie.nl/Report/DataEntiretyCheck/GetDataToDownload"
+            }
             Self::Gebouwen => "https://www.dbenergie.nl/Buildings/List/ExportList",
             Self::MeetEnInfra => "https://www.dbenergie.nl/Report/MeteringServices/ExportList",
             Self::Metadata => "https://www.dbenergie.nl/Connections/List/ExportMetaData",
@@ -66,6 +82,7 @@ impl Report {
             Self::Tussenmeter => {
                 "https://www.dbenergie.nl/Connections/IntermediateMeter/ExportList"
             }
+            Self::Verbruik => "https://www.dbenergie.nl/Report/Consumption/GetDownload",
         }
     }
 
@@ -85,9 +102,21 @@ impl Report {
         // Create a get request for the report
         let mut request = Request::new(Method::GET, Url::from_str(self.url())?);
 
-        request
-            .headers_mut()
-            .insert("request", HeaderValue::from_str("MjAyMw==")?);
+        match self {
+            Self::Aansluitinglijst
+            | Self::Belastingcluster
+            | Self::Gebouwen
+            | Self::MeetEnInfra
+            | Self::Metadata
+            | Self::Meterstanden
+            | Self::Tussenmeter => request
+                .headers_mut()
+                .insert("request", HeaderValue::from_str("MjAyMw==")?),
+            Self::Co2 => request.headers_mut().insert("request", HeaderValue::from_str("eyJwb3J0YWxJZCI6IjYiLCJ1bml0SWQiOjEsImN1c3RvbWVySWRzIjoiNTAiLCJ5ZWFyRnJvbSI6MjAyMywieWVhclRpbGwiOjIwMjMsInJlcG9ydFR5cGUiOiJ0b3RhbCJ9")?),
+            Self::Datakwaliteit => request.headers_mut().insert("request", HeaderValue::from_str("eyJwb3J0YWxJZCI6MCwicHJvZHVjdElkIjoxLCJjdXN0b21lcklkIjoiNTAiLCJkZXBhcnRtZW50SWRzIjoiIiwiY29zdHNwbGFjZUlkIjoiMCIsImNvbnN1bXB0aW9uQ2F0ZWdvcnlJZHMiOiIiLCJjb25zdW1wdGlvblR5cGVJZHMiOiIiLCJ0YXhhdGlvbkNsdXN0ZXJJZCI6IjAiLCJlYW5Db2RlIjoiIiwieWVhciI6MjAyMywibW9udGgiOjExfQ==")?),
+            Self::Mj => request.headers_mut().insert("request", HeaderValue::from_str("eyJwb3J0YWxJZCI6IjYiLCJ1bml0SWQiOjIsImN1c3RvbWVySWRzIjoiNTAiLCJ5ZWFyRnJvbSI6MjAyMywieWVhclRpbGwiOjIwMjMsInJlcG9ydFR5cGUiOiJ0b3RhbCJ9")?),
+            Self::Verbruik => request.headers_mut().insert("request", HeaderValue::from_str("eyJjbGFzc2lmaWNhdGlvbklkIjowLCJjb25zdW1wdGlvbmNhdGVnb3J5SWRzIjoiIiwiY29uc3VtcHRpb250eXBlSWRzIjoiIiwiY29zdHNwbGFjZUlkcyI6IiIsImN1c3RvbWVySWRzIjoiNTAiLCJwb3J0YWxDb2xsZWN0aXZlSWRzIjoiIiwiZGF0YWNoZWNrcmVwb3J0IjpmYWxzZSwiZGVwYXJ0bWVudElkcyI6IiIsImVhbmNvZGUiOiIiLCJlbmVyZ3l0YXhJZHMiOiIiLCJnZXRPREEiOnRydWUsIm1vbnRoRnJvbSI6MSwibW9udGhUaWxsIjoxMiwibW9udGhzIjpmYWxzZSwicG9ydGFsSWQiOiIwIiwicHJvZHVjdElkIjoxLCJyZXBvcnRUeXBlIjoidG90YWwiLCJ5ZWFyRnJvbSI6MjAyMywieWVhclRpbGwiOjIwMjMsImlzQ29sbGVjdGl2ZSI6ZmFsc2V9")?),
+        };
 
         // Send the request
         let response = client.execute(request).await?;
