@@ -30,11 +30,15 @@ async fn main() {
     for report in [
         Report::Aansluitinglijst,
         Report::Belastingcluster,
+        Report::Co2,
+        Report::Datakwaliteit,
         Report::Gebouwen,
         Report::MeetEnInfra,
         Report::Metadata,
         Report::Meterstanden,
+        Report::Mj,
         Report::Tussenmeter,
+        Report::Verbruik,
     ] {
         // Print the current report
         println!("{report:?}");
