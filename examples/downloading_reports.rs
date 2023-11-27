@@ -12,14 +12,21 @@ struct Args {
 
 #[tokio::main]
 async fn main() {
+    // Parse arguments
     let args = Args::parse();
+
+    // Create a cookie storing client
     let client = Client::builder()
         .cookie_store(true)
         .build()
         .expect("Failed to create client");
+
+    // Login to DB Energie
     login(&client, &args.mail, &args.password)
         .await
         .expect("Login failed");
+
+    // Test for all reports whether they can be downloaded
     for report in [
         Report::Aansluitinglijst,
         Report::Belastingcluster,
@@ -29,7 +36,10 @@ async fn main() {
         Report::Meterstanden,
         Report::Tussenmeter,
     ] {
+        // Print the current report
         println!("{report:?}");
+
+        // Download it and make sure it isn't empty
         assert!(
             !report
                 .download_latest_version(&client)
