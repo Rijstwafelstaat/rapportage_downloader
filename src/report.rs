@@ -2,8 +2,10 @@ use std::{fmt::Display, io as std_io, str::FromStr, string::FromUtf8Error};
 
 use reqwest::{
     header::{HeaderValue, InvalidHeaderValue},
-    Client, Method, Request, Url,
+    Method, Request, Url,
 };
+
+use crate::login::CookieStore;
 
 /// Errors that can occur while downloading a report
 #[derive(Debug, thiserror::Error)]
@@ -98,7 +100,9 @@ impl Report {
     /// - If the response body wasn't a json object
     /// - If the response body didn't contain a fileName
     /// - If the fileName isn't a string
-    pub async fn latest_version(&self, client: &Client) -> Result<String, Error> {
+    pub async fn latest_version(&self, cookie_store: &CookieStore) -> Result<String, Error> {
+        let client = cookie_store.client();
+
         // Create a get request for the report
         let mut request = Request::new(Method::GET, Url::from_str(self.url())?);
 
@@ -153,11 +157,12 @@ impl Report {
     /// - If the response body couldn't be written to the file
     pub async fn download_version(
         &self,
-        client: &Client,
+        cookie_store: &CookieStore,
         filename: &str,
     ) -> Result<Vec<u8>, Error> {
         // Create a request for the file
-        let response = client
+        let response = cookie_store
+            .client()
             .get(format!(
                 "https://www.dbenergie.nl/Global/Download?fileName={filename}"
             ))
@@ -175,13 +180,13 @@ impl Report {
     /// - If downloading the version returns an error
     pub async fn download_latest_version(
         &self,
-        client: &Client,
+        cookie_store: &CookieStore,
     ) -> Result<(String, Vec<u8>), Error> {
         // Request the latest version
-        let latest_version = self.latest_version(client).await?;
+        let latest_version = self.latest_version(cookie_store).await?;
 
         // Download the version
-        let response = self.download_version(client, &latest_version).await?;
+        let response = self.download_version(cookie_store, &latest_version).await?;
         Ok((latest_version, response))
     }
 }

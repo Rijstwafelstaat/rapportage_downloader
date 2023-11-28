@@ -1,6 +1,5 @@
 use clap::Parser;
-use rapportage_downloader::{login::login, report::Report};
-use reqwest::Client;
+use rapportage_downloader::{login::CookieStore, report::Report};
 
 #[derive(Parser)]
 struct Args {
@@ -15,14 +14,8 @@ async fn main() {
     // Parse arguments
     let args = Args::parse();
 
-    // Create a cookie storing client
-    let client = Client::builder()
-        .cookie_store(true)
-        .build()
-        .expect("Failed to create client");
-
     // Login to DB Energie
-    login(&client, &args.mail, &args.password)
+    let cookie_store = CookieStore::login(&args.mail, &args.password)
         .await
         .expect("Login failed");
 
@@ -46,7 +39,7 @@ async fn main() {
         // Download it and make sure it isn't empty
         assert!(
             !report
-                .download_latest_version(&client)
+                .download_latest_version(&cookie_store)
                 .await
                 .unwrap_or_else(|error| panic!("Failed to request {:?}\n{error:?}", report))
                 .1
