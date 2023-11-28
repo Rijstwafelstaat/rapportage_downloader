@@ -1,6 +1,7 @@
 use std::{path::PathBuf, str::FromStr};
 
 use clap::Parser;
+use login::CookieStore;
 use report::Report;
 use reqwest::Client;
 use tokio::{
@@ -79,14 +80,14 @@ async fn main() {
         .expect("Failed to create client");
 
     // Log in to receive a cookie
-    login::login(&client, &args.mail, &args.password)
+    let cookie_store = CookieStore::login(&args.mail, &args.password)
         .await
         .expect("Login failed");
 
     // Download the latest version of the requested report
     let (filename, response) = args
         .report
-        .download_latest_version(&client)
+        .download_latest_version(&cookie_store)
         .await
         .expect("Failed to download latest report version");
 
