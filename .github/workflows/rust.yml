@@ -12,7 +12,7 @@ env:
 jobs:
   build-linux:
 
-    runs-on: linux
+    runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v3
@@ -23,7 +23,7 @@ jobs:
     
   build-windows:
 
-    runs-on: windows
+    runs-on: windows-latest
 
     steps:
     - uses: actions/checkout@v3
@@ -34,7 +34,7 @@ jobs:
 
   build-macos:
 
-    runs-on: macos
+    runs-on: macos-latest
 
     steps:
     - uses: actions/checkout@v3
