@@ -1,5 +1,3 @@
-#![warn(clippy::unwrap_used, clippy::expect_used)]
-
 use std::str::Utf8Error;
 
 use reqwest::Client;
