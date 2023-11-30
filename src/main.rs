@@ -35,6 +35,22 @@ pub struct Args {
     output: Option<String>,
 }
 
+impl Args {
+    pub fn all(&self) -> bool {
+        !(self.mail.is_none()
+            || self.password.is_none()
+            || self.report.is_none()
+            || self.output.is_none())
+    }
+
+    pub fn any(&self) -> bool {
+        self.mail.is_some()
+            || self.password.is_some()
+            || self.report.is_some()
+            || self.output.is_some()
+    }
+}
+
 /// Saves the data to a server or file
 async fn save(client: &Client, output: &str, data: Vec<u8>, filename: String) {
     if let Ok(url) = url::Url::from_str(output) {
@@ -77,6 +93,7 @@ fn read_line(request: &str) -> String {
     io::stdout()
         .write_all(request.as_bytes())
         .expect("Failed to write output");
+    io::stdout().flush().expect("Failed to flush output");
 
     // Read the data from the screen
     let mut line = String::new();
@@ -88,12 +105,44 @@ fn read_line(request: &str) -> String {
     line.trim().to_owned()
 }
 
-#[tokio::main]
-async fn main() {
-    // Parse the arguments
-    let args = Args::parse();
+fn unpack_arguments(args: Args) -> (String, String, Report, String) {
+    if args.any() && !args.all() {
+        // Check all missing arguments
+        let mut output = "Missing arguments:".to_owned();
+        if args.mail.is_none() {
+            output.push_str(" -m [mail]");
+        }
+        if args.password.is_none() {
+            output.push_str(" -p [password]");
+        }
+        if args.report.is_none() {
+            output.push_str(" -r [report]");
+        }
 
-    // Unpack the arguments, read them from the terminal if None
+        // Also add the output criteria when the output is missing
+        if args.output.is_none() {
+            output
+                .push_str(" -o [output]\n\nOutput path must be either an url or a directory path.");
+        }
+
+        // Add the possible report types, if the report type was missing
+        if args.report.is_none() {
+            output.push_str("\nThe report must be either aansluitinglijst, belastingcluster, co2, datakwaliteit, gebouwen, meet-en-infra, metadata, meterstanden, mj, tussenmeter, verbruik.");
+        }
+
+        // Make sure the user knows about the help option
+        output.push_str("\nFor more information, try '--help'\n");
+
+        // Print output
+        io::stdout()
+            .write_all(output.as_bytes())
+            .expect("Failed to write output");
+
+        // Exit the process with an error code
+        std::process::exit(-1);
+    }
+
+    // Unpack the arguments
     let mail = args.mail.unwrap_or_else(|| read_line("Enter mail: "));
     let password = args
         .password
@@ -104,6 +153,16 @@ async fn main() {
     let output = args
         .output
         .unwrap_or_else(|| read_line("Enter the output path: "));
+    (mail, password, report, output)
+}
+
+#[tokio::main]
+async fn main() {
+    // Parse the arguments
+    let args = Args::parse();
+
+    // Unpack the arguments, read them from the terminal if None
+    let (mail, password, report, output) = unpack_arguments(args);
 
     // Create a client
     let client = Client::builder()

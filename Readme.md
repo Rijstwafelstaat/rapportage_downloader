@@ -1,11 +1,12 @@
 # Rapportage Downloader
-Deze applicatie haalt de nieuwste versie van een rapport op. Je moet hiervoor wel ingelogd zijn op de website en de cookies van DB Energie kopiëren. Let op dat deze cookies ongeldig worden zodra je uitgelogd bent of automatisch uitgelogd wordt. Deze applicatie draait momenteel alleen in de terminal.
+Deze applicatie haalt de nieuwste versie van een rapport op. Deze applicatie draait alleen in de terminal.
 ## Dependencies
 [Rust](https://www.rust-lang.org/tools/install)
 ## Compileren
 Je kan de applicatie compileren met `cargo build` of `cargo run` met eventueel de `--release` flag, afhankelijk van of je de debug of geoptimaliseerde versie wilt. Het verschil tuseen `cargo build` en `cargo run` is dat je bij `cargo run` de binary direct runt. Aangezien het verplicht is om direct de nodige informatie als argument te geven, moet je `--` tussen het run command en de argumenten zetten.
 ## Runnen
-Je kan de binary direct runnen in de terminal of met het `cargo run` command. Bij het runnen moeten een email-adres, wachtwoord, een output path/url en de benodigde rapportage meegegeven worden. Het email-adres en wachtwoord moeten hetzelfde zijn als die je gebruikt om bij DB Energie in te loggen. Als een argument niet gegeven wordt, zal het gevraagd worden. Om meer info te krijgen over de mogelijke argumenten kan je `-h` of `--help`. Het email-adres dient meegegeven te worden met `-m` of `--mail` en het wachtwoord met `-p` of `--password`. De output path/url kan een directory path of url zijn en dient meegegeven te worden met `-o` of `--output`. De rapportage dient meegegevent te worden met de `-r` of `--report` flag. De volgende rapportages zijn op dit moment downloadbaar:
+### Argumenten
+Je kan de binary direct runnen in de terminal of met het `cargo run` command. Bij het runnen moeten een email-adres, wachtwoord, een output path/url en de benodigde rapportage meegegeven worden. Het email-adres en wachtwoord moeten hetzelfde zijn als die je gebruikt om bij DB Energie in te loggen. Om meer info te krijgen over de mogelijke argumenten kan je `-h` of `--help`. Het email-adres dient meegegeven te worden met `-m` of `--mail` en het wachtwoord met `-p` of `--password`. De output path/url kan een directory path of url zijn en dient meegegeven te worden met `-o` of `--output`. De rapportage dient meegegevent te worden met de `-r` of `--report` flag. De volgende rapportages zijn op dit moment downloadbaar:
 - `aansluitinglijst`: Energie aansluitingenlijst
 - `belastingcluster`: Energie belastingcluster per meter
 - `co2`: Verbruik (in CO2)
@@ -17,6 +18,8 @@ Je kan de binary direct runnen in de terminal of met het `cargo run` command. Bi
 - `mj` Verbruik (in MJ)
 - `tussenmeter`: Tussenmeters
 - `verbruik`: verbruik (per product)
+### Starten zonder argumenten
+Als de applicatie zonder terminal gestart wordt of geen argumenten mee worden gegeven, zullen alle argumenten individueel tijdens run-time gevraagd worden. Als er een deel gegeven wordt, zal er een foutmelding getoond worden.
 ## Todo
 Voor de volgende rapportages is nog meer werk nodig:
 - meterstanden buiten 2023
