@@ -9,12 +9,12 @@ edition = "2021"
 debug = true
 
 [dependencies]
-clap = { version = "4.4.8", features = ["derive"] }
-reqwest = { version = "0.11.22", features = ["cookies", "multipart"] }
-scraper = "0.18.1"
-serde = "1.0.192"
-serde_json = "1.0.108"
-serde_urlencoded = "0.7.1"
-thiserror = "1.0.50"
-tokio = { version = "1.34.0", features = ["full"] }
-url = "2.4.1"
+clap = { version = "4.4", features = ["derive"] }
+reqwest = { version = "0.11", features = ["cookies", "multipart"] }
+scraper = "0.18"
+serde = "1.0"
+serde_json = "1.0"
+serde_urlencoded = "0.7"
+thiserror = "1.0"
+tokio = { version = "1.34", features = ["full"] }
+url = "2.4"
