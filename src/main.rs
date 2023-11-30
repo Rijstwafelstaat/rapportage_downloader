@@ -1,4 +1,4 @@
-use std::{path::PathBuf, str::FromStr};
+use std::{path::PathBuf, str::FromStr as _};
 
 use clap::Parser;
 use login::CookieStore;
@@ -6,7 +6,7 @@ use report::Report;
 use reqwest::Client;
 use tokio::{
     fs::{self, File},
-    io::AsyncWriteExt,
+    io::AsyncWriteExt as _,
 };
 
 mod login;
@@ -32,8 +32,8 @@ pub struct Args {
 }
 
 /// Saves the data to a server or file
-async fn save(client: &Client, args: &Args, data: Vec<u8>, filename: String) {
-    if let Ok(url) = url::Url::from_str(&args.output) {
+async fn save(client: &Client, output: &str, data: Vec<u8>, filename: String) {
+    if let Ok(url) = url::Url::from_str(output) {
         // Store the report in a form
         let form = reqwest::multipart::Form::new().part(
             "file",
@@ -47,7 +47,7 @@ async fn save(client: &Client, args: &Args, data: Vec<u8>, filename: String) {
             .send()
             .await
             .expect("Failed to send file");
-    } else if let Ok(directory) = PathBuf::from_str(&args.output) {
+    } else if let Ok(directory) = PathBuf::from_str(output) {
         // Create the requested directory
         fs::create_dir_all(&directory)
             .await
@@ -92,5 +92,5 @@ async fn main() {
         .expect("Failed to download latest report version");
 
     // Save the response to a server or file
-    save(&client, &args, response, filename).await;
+    save(&client, &args.output, response, filename).await;
 }
