@@ -20,6 +20,8 @@ Je kan de binary direct runnen in de terminal of met het `cargo run` command. Bi
 - `verbruik`: verbruik (per product)
 
 Om meer info te krijgen over de mogelijke argumenten kan je `-h` of `--help` gebruiken.
+### Docker
+Naast een lokale binary kan je het ook builden en runnen met docker. Op deze manier hoeft Rust niet geïnstalleerd te worden op de computer waar de applicatie op draait. In plaats daarvan wordt Rust geïnstalleerd in de container of wordt er een container geladen waar Rust al in geïnstalleerd is. Het gebruik is ongeveer hetzelfde, maar in plaats van `cargo run --release --` moet je `docker run -e MAIL=[e-mail] -e PASSWORD="wachtwoord" -e OUTPUT="http(s)://pad.naar.server/" rapportage_downloader` gebruiken. Indien nodig, kan daar `-e REPORT=rapportage-naam` aan toegevoegd worden voor een andere rapportage dan die met meterstanden. Het is bij Docker belangrijk dat de argumenten tussen `run` en `rapportage_downloader` komen, want anders begrijpt Docker het niet. Indien je de client wilt testen, kan je een bericht naar localhost sturen door `--add-host host.docker.internal:host-gateway` te plaatsen bij de argumenten.
 ## Todo
 Voor de volgende rapportages is nog meer werk nodig:
 - meterstanden buiten 2023
