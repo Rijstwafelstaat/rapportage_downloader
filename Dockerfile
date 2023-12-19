@@ -56,8 +56,7 @@ FROM base AS final
 
 ENV MAIL=""
 ENV PASSWORD=""
-ENV REPORT="meterstanden"
 ENV OUTPUT=.
 
 # What the container should run when it is started.
-CMD ["sh", "-c", "cargo run --release -- -m ${MAIL} -p ${PASSWORD} -r ${REPORT} -o ${OUTPUT}"]
+CMD ["sh", "-c", "cargo run --release -- -m ${MAIL} -p ${PASSWORD} -o ${OUTPUT}"]

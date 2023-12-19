@@ -1,9 +1,11 @@
 use std::{fmt::Display, io as std_io, str::FromStr, string::FromUtf8Error};
 
+use chrono::Datelike;
 use reqwest::{
     header::{HeaderValue, InvalidHeaderValue},
     Method, Request, Url,
 };
+use serde_json::json;
 
 use crate::login::CookieStore;
 
@@ -28,7 +30,7 @@ impl Display for Error {
 }
 
 /// The available report types
-#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+#[derive(Debug, Clone)]
 pub enum Report {
     /// Energie aansluitingenlijst
     Aansluitinglijst,
@@ -41,6 +43,8 @@ pub enum Report {
 
     /// Datakwaliteits rapportage
     Datakwaliteit,
+
+    EnergieVerbruikPerUur(u32, String),
 
     /// Gebouwen
     Gebouwen,
@@ -67,7 +71,7 @@ pub enum Report {
 impl Report {
     /// Returns the corresponding url for a report
     #[must_use]
-    pub const fn url(&self) -> &str {
+    pub fn url(&self) -> &str {
         match self {
             Self::Aansluitinglijst => "https://www.dbenergie.nl/Connections/List/ExportList",
             Self::Belastingcluster => {
@@ -76,6 +80,9 @@ impl Report {
             Self::Co2 | Self::Mj => "https://www.dbenergie.nl/Report/Co2/GetDownload",
             Self::Datakwaliteit => {
                 "https://www.dbenergie.nl/Report/DataEntiretyCheck/GetDataToDownload"
+            }
+            Self::EnergieVerbruikPerUur(_, _) => {
+                "https://www.dbenergie.nl/Report/Analyze/GetDownload"
             }
             Self::Gebouwen => "https://www.dbenergie.nl/Buildings/List/ExportList",
             Self::MeetEnInfra => "https://www.dbenergie.nl/Report/MeteringServices/ExportList",
@@ -106,6 +113,9 @@ impl Report {
         // Create a get request for the report
         let mut request = Request::new(Method::GET, Url::from_str(self.url())?);
 
+        let now = chrono::Local::now();
+
+        // Base64 json
         match self {
             Self::Aansluitinglijst
             | Self::Belastingcluster
@@ -115,11 +125,12 @@ impl Report {
             | Self::Meterstanden
             | Self::Tussenmeter => request
                 .headers_mut()
-                .insert("request", HeaderValue::from_str("MjAyMw==")?),
-            Self::Co2 => request.headers_mut().insert("request", HeaderValue::from_str("eyJwb3J0YWxJZCI6IjYiLCJ1bml0SWQiOjEsImN1c3RvbWVySWRzIjoiNTAiLCJ5ZWFyRnJvbSI6MjAyMywieWVhclRpbGwiOjIwMjMsInJlcG9ydFR5cGUiOiJ0b3RhbCJ9")?),
-            Self::Datakwaliteit => request.headers_mut().insert("request", HeaderValue::from_str("eyJwb3J0YWxJZCI6MCwicHJvZHVjdElkIjoxLCJjdXN0b21lcklkIjoiNTAiLCJkZXBhcnRtZW50SWRzIjoiIiwiY29zdHNwbGFjZUlkIjoiMCIsImNvbnN1bXB0aW9uQ2F0ZWdvcnlJZHMiOiIiLCJjb25zdW1wdGlvblR5cGVJZHMiOiIiLCJ0YXhhdGlvbkNsdXN0ZXJJZCI6IjAiLCJlYW5Db2RlIjoiIiwieWVhciI6MjAyMywibW9udGgiOjExfQ==")?),
-            Self::Mj => request.headers_mut().insert("request", HeaderValue::from_str("eyJwb3J0YWxJZCI6IjYiLCJ1bml0SWQiOjIsImN1c3RvbWVySWRzIjoiNTAiLCJ5ZWFyRnJvbSI6MjAyMywieWVhclRpbGwiOjIwMjMsInJlcG9ydFR5cGUiOiJ0b3RhbCJ9")?),
-            Self::Verbruik => request.headers_mut().insert("request", HeaderValue::from_str("eyJjbGFzc2lmaWNhdGlvbklkIjowLCJjb25zdW1wdGlvbmNhdGVnb3J5SWRzIjoiIiwiY29uc3VtcHRpb250eXBlSWRzIjoiIiwiY29zdHNwbGFjZUlkcyI6IiIsImN1c3RvbWVySWRzIjoiNTAiLCJwb3J0YWxDb2xsZWN0aXZlSWRzIjoiIiwiZGF0YWNoZWNrcmVwb3J0IjpmYWxzZSwiZGVwYXJ0bWVudElkcyI6IiIsImVhbmNvZGUiOiIiLCJlbmVyZ3l0YXhJZHMiOiIiLCJnZXRPREEiOnRydWUsIm1vbnRoRnJvbSI6MSwibW9udGhUaWxsIjoxMiwibW9udGhzIjpmYWxzZSwicG9ydGFsSWQiOiIwIiwicHJvZHVjdElkIjoxLCJyZXBvcnRUeXBlIjoidG90YWwiLCJ5ZWFyRnJvbSI6MjAyMywieWVhclRpbGwiOjIwMjMsImlzQ29sbGVjdGl2ZSI6ZmFsc2V9")?),
+                .insert("request", HeaderValue::from_str(&base64::encode(&chrono::Local::now().year().to_string()))?),
+            Self::Co2 => request.headers_mut().insert("request", HeaderValue::from_str(&base64::encode(&json!({"portalId":"6","unitId":1,"customerIds":"50","yearFrom":now.year() - 1,"yearTill":now.year(),"reportType":"total"}).to_string()))?),
+            Self::Datakwaliteit => request.headers_mut().insert("request", HeaderValue::from_str(&base64::encode(&json!({"portalId":0,"productId":1,"customerId":"50","departmentIds":"","costsplaceId":"0","consumptionCategoryIds":"","consumptionTypeIds":"","taxationClusterId":"0","eanCode":"","year":now.year(),"month":now.month()}).to_string()))?),
+            Self::Mj => request.headers_mut().insert("request", HeaderValue::from_str(&base64::encode(&json!({"portalId":"6","unitId":2,"customerIds":"50","yearFrom":now.year() - 1,"yearTill":now.year(),"reportType":"total"}).to_string()))?),
+            Self::Verbruik => request.headers_mut().insert("request", HeaderValue::from_str(&base64::encode(&json!({"classificationId":0,"consumptioncategoryIds":"","consumptiontypeIds":"","costsplaceIds":"","customerIds":"50","portalCollectiveIds":"","datacheckreport":false,"departmentIds":"","eancode":"","energytaxIds":"","getODA":true,"monthFrom":1,"monthTill":12,"months":false,"portalId":"0","productId":1,"reportType":"total","yearFrom":now.year() - 1,"yearTill":now.year(),"isCollective":false}).to_string()))?),
+            Self::EnergieVerbruikPerUur(id, datum) => request.headers_mut().insert("request", HeaderValue::from_str(&base64::encode(&json!({"meterId":[*id],"IntermediateMeterId":0,"startDate":format!("{datum} 00:00"),"endDate":format!("{datum} 23:55"),"interval":"uur","chartType":"column","excel":true,"WeatherDataType":0,"productId":0}).to_string()))?),
         };
 
         // Send the request
@@ -169,7 +180,11 @@ impl Report {
             .send()
             .await?;
 
-        Ok(response.bytes().await?.into_iter().collect::<Vec<u8>>())
+        if response.status() != reqwest::StatusCode::OK {
+            Ok(vec![])
+        } else {
+            Ok(response.bytes().await?.into_iter().collect::<Vec<u8>>())
+        }
     }
 
     /// Downloads the latest version of the report.
