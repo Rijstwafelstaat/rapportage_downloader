@@ -1,4 +1,4 @@
-use std::str::Utf8Error;
+use std::{str::Utf8Error, sync::Arc};
 
 use reqwest::Client;
 use scraper::error::SelectorErrorKind;
@@ -33,7 +33,7 @@ impl CookieStore {
             .await?;
 
         // Read the body
-        let login_page = response.bytes().await?.into_iter().collect::<Vec<u8>>();
+        let login_page = response.bytes().await?.to_vec();
 
         // Convert it to &str
         let login_page = core::str::from_utf8(&login_page)?;
@@ -59,8 +59,12 @@ impl CookieStore {
     ///
     /// # Errors
     /// Returns an error if the verification token couldn't be retrieved or the login form couldn't be send.
-    pub async fn login(mail: &str, password: &str) -> Result<Self, Error> {
-        let client = Client::builder().cookie_store(true).build()?;
+    pub async fn login(
+        mail: &str,
+        password: &str,
+    ) -> Result<(Self, Arc<reqwest::cookie::Jar>), Error> {
+        let jar = Arc::new(reqwest::cookie::Jar::default());
+        let client = Client::builder().cookie_provider(jar.clone()).build()?;
 
         // Create the login data
         let login_data = [
@@ -78,7 +82,7 @@ impl CookieStore {
             .form(&login_data)
             .send()
             .await?;
-        Ok(Self { client })
+        Ok((Self { client }, jar))
     }
 
     #[allow(clippy::must_use_candidate)]

@@ -1,5 +1,8 @@
+use std::path::PathBuf;
+
 use clap::Parser;
 use rapportage_downloader::{login::CookieStore, report::Report};
+use tokio::{fs::File, io::AsyncWriteExt};
 
 #[derive(Parser)]
 struct Args {
@@ -7,6 +10,8 @@ struct Args {
     mail: String,
     #[arg(short, long)]
     password: String,
+    #[arg(short, long)]
+    output: Option<PathBuf>,
 }
 
 #[tokio::main]
@@ -15,7 +20,7 @@ async fn main() {
     let args = Args::parse();
 
     // Login to DB Energie
-    let cookie_store = CookieStore::login(&args.mail, &args.password)
+    let (cookie_store, _) = CookieStore::login(&args.mail, &args.password)
         .await
         .expect("Login failed");
 
@@ -36,16 +41,23 @@ async fn main() {
         // Print the current report
         println!("{report:?}");
 
-        // Download it and make sure it isn't empty
-        assert!(
-            !report
-                .download_latest_version(&cookie_store)
+        // Download the report
+        let (file_name, data) = report
+            .download_latest_version(&cookie_store)
+            .await
+            .unwrap_or_else(|error| panic!("Failed to request {:?}\n{error:?}", report));
+
+        // Make sure it isn't empty
+        assert!(!data.is_empty(), "{:?} report is empty!", report);
+
+        // Save the file if requested
+        if let Some(output) = &args.output {
+            File::create(output.clone().join(file_name))
                 .await
-                .unwrap_or_else(|error| panic!("Failed to request {:?}\n{error:?}", report))
-                .1
-                .is_empty(),
-            "{:?} report is empty!",
-            report
-        );
+                .unwrap()
+                .write_all(&data)
+                .await
+                .unwrap();
+        }
     }
 }

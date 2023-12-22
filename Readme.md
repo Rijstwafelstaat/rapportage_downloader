@@ -24,9 +24,9 @@ Om meer info te krijgen over de mogelijke argumenten kan je `-h` of `--help` geb
 Naast een lokale binary kan je het ook builden en runnen met docker. Op deze manier hoeft Rust niet geïnstalleerd te worden op de computer waar de applicatie op draait. In plaats daarvan wordt Rust geïnstalleerd in de container of wordt er een container geladen waar Rust al in geïnstalleerd is. Het gebruik is ongeveer hetzelfde, maar in plaats van `cargo run --release --` moet je `docker run -e MAIL=[e-mail] -e PASSWORD="wachtwoord" -e OUTPUT="http(s)://pad.naar.server/" rapportage_downloader` gebruiken. Het is bij Docker belangrijk dat de argumenten tussen `run` en `rapportage_downloader` komen, want anders begrijpt Docker het niet. Indien je de client wilt testen, kan je een bericht naar localhost sturen door `--add-host host.docker.internal:host-gateway` te plaatsen bij de argumenten.
 ## Todo
 Voor de volgende rapportages is nog meer werk nodig:
-- meterstanden buiten 2023
-- Datakwaliteits rapportage buiten november 2023
-- Verbruik rapportages buiten 2023
+- meterstanden buiten het huidige jaar
+- Datakwaliteits rapportage buiten de huidige maand en jaar
+- Verbruik rapportages buiten het huidige en vorige jaar
 
 De volgende rapportages zijn niet downloadbaar:
 - Energie analyse

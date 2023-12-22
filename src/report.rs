@@ -1,5 +1,6 @@
 use std::{fmt::Display, io as std_io, str::FromStr, string::FromUtf8Error};
 
+use base64::Engine;
 use chrono::Datelike;
 use reqwest::{
     header::{HeaderValue, InvalidHeaderValue},
@@ -44,7 +45,7 @@ pub enum Report {
     /// Datakwaliteits rapportage
     Datakwaliteit,
 
-    EnergieVerbruikPerUur(u32, String),
+    EnergieVerbruikPerUur(Vec<u32>, chrono::NaiveDate, chrono::NaiveDate),
 
     /// Gebouwen
     Gebouwen,
@@ -81,7 +82,7 @@ impl Report {
             Self::Datakwaliteit => {
                 "https://www.dbenergie.nl/Report/DataEntiretyCheck/GetDataToDownload"
             }
-            Self::EnergieVerbruikPerUur(_, _) => {
+            Self::EnergieVerbruikPerUur(_, _, _) => {
                 "https://www.dbenergie.nl/Report/Analyze/GetDownload"
             }
             Self::Gebouwen => "https://www.dbenergie.nl/Buildings/List/ExportList",
@@ -115,7 +116,9 @@ impl Report {
 
         let now = chrono::Local::now();
 
-        // Base64 json
+        let base64_encoder = base64::engine::general_purpose::STANDARD;
+
+        // Add report dependent headers
         match self {
             Self::Aansluitinglijst
             | Self::Belastingcluster
@@ -125,12 +128,12 @@ impl Report {
             | Self::Meterstanden
             | Self::Tussenmeter => request
                 .headers_mut()
-                .insert("request", HeaderValue::from_str(&base64::encode(&chrono::Local::now().year().to_string()))?),
-            Self::Co2 => request.headers_mut().insert("request", HeaderValue::from_str(&base64::encode(&json!({"portalId":"6","unitId":1,"customerIds":"50","yearFrom":now.year() - 1,"yearTill":now.year(),"reportType":"total"}).to_string()))?),
-            Self::Datakwaliteit => request.headers_mut().insert("request", HeaderValue::from_str(&base64::encode(&json!({"portalId":0,"productId":1,"customerId":"50","departmentIds":"","costsplaceId":"0","consumptionCategoryIds":"","consumptionTypeIds":"","taxationClusterId":"0","eanCode":"","year":now.year(),"month":now.month()}).to_string()))?),
-            Self::Mj => request.headers_mut().insert("request", HeaderValue::from_str(&base64::encode(&json!({"portalId":"6","unitId":2,"customerIds":"50","yearFrom":now.year() - 1,"yearTill":now.year(),"reportType":"total"}).to_string()))?),
-            Self::Verbruik => request.headers_mut().insert("request", HeaderValue::from_str(&base64::encode(&json!({"classificationId":0,"consumptioncategoryIds":"","consumptiontypeIds":"","costsplaceIds":"","customerIds":"50","portalCollectiveIds":"","datacheckreport":false,"departmentIds":"","eancode":"","energytaxIds":"","getODA":true,"monthFrom":1,"monthTill":12,"months":false,"portalId":"0","productId":1,"reportType":"total","yearFrom":now.year() - 1,"yearTill":now.year(),"isCollective":false}).to_string()))?),
-            Self::EnergieVerbruikPerUur(id, datum) => request.headers_mut().insert("request", HeaderValue::from_str(&base64::encode(&json!({"meterId":[*id],"IntermediateMeterId":0,"startDate":format!("{datum} 00:00"),"endDate":format!("{datum} 23:55"),"interval":"uur","chartType":"column","excel":true,"WeatherDataType":0,"productId":0}).to_string()))?),
+                .insert("request", HeaderValue::from_str(&base64_encoder.encode(chrono::Local::now().year().to_string()))?),
+            Self::Co2 => request.headers_mut().insert("request", HeaderValue::from_str(&base64_encoder.encode(json!({"portalId":"6","unitId":1,"customerIds":"50","yearFrom":now.year() - 1,"yearTill":now.year(),"reportType":"total"}).to_string()))?),
+            Self::Datakwaliteit => request.headers_mut().insert("request", HeaderValue::from_str(&base64_encoder.encode(json!({"portalId":0,"productId":1,"customerId":"50","departmentIds":"","costsplaceId":"0","consumptionCategoryIds":"","consumptionTypeIds":"","taxationClusterId":"0","eanCode":"","year":now.year(),"month":now.month()}).to_string()))?),
+            Self::Mj => request.headers_mut().insert("request", HeaderValue::from_str(&base64_encoder.encode(json!({"portalId":"6","unitId":2,"customerIds":"50","yearFrom":now.year() - 1,"yearTill":now.year(),"reportType":"total"}).to_string()))?),
+            Self::Verbruik => request.headers_mut().insert("request", HeaderValue::from_str(&base64_encoder.encode(json!({"classificationId":0,"consumptioncategoryIds":"","consumptiontypeIds":"","costsplaceIds":"","customerIds":"50","portalCollectiveIds":"","datacheckreport":false,"departmentIds":"","eancode":"","energytaxIds":"","getODA":true,"monthFrom":1,"monthTill":12,"months":false,"portalId":"0","productId":1,"reportType":"total","yearFrom":now.year() - 1,"yearTill":now.year(),"isCollective":false}).to_string()))?),
+            Self::EnergieVerbruikPerUur(ids, start_date, end_date) => request.headers_mut().insert("request", HeaderValue::from_str(&base64_encoder.encode(json!({"meterId":ids,"IntermediateMeterId":0,"startDate":format!("{} 00:00", start_date.format("%Y-%m-%d")),"endDate":format!("{} 23:55", end_date.format("%Y-%m-%d")),"interval":"uur","chartType":"column","excel":true,"WeatherDataType":0,"productId":0}).to_string()))?),
         };
 
         // Send the request
@@ -183,7 +186,7 @@ impl Report {
         if response.status() != reqwest::StatusCode::OK {
             Ok(vec![])
         } else {
-            Ok(response.bytes().await?.into_iter().collect::<Vec<u8>>())
+            Ok(response.bytes().await?.to_vec())
         }
     }
 
