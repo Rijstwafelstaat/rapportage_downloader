@@ -19,6 +19,7 @@ impl std::fmt::Display for Error {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct CookieStore {
     client: Client,
 }

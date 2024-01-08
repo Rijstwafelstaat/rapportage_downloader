@@ -1,18 +1,24 @@
 #![warn(clippy::pedantic, clippy::nursery)]
-use std::time::Duration;
-use std::{fmt::Display, io, path::PathBuf, str::FromStr as _, string::FromUtf8Error};
+use std::{
+    fmt::Display, io, path::PathBuf, str::FromStr as _, string::FromUtf8Error, sync::Arc,
+    time::Duration,
+};
 
 use base64::Engine;
 use calamine::{Reader, Xlsx};
 use chrono::Datelike;
 use clap::Parser;
-use rapportage_downloader::report::Report;
-use rapportage_downloader::{login::CookieStore, report};
+use rapportage_downloader::{
+    login::CookieStore,
+    report::{self, Report},
+};
 use reqwest::{cookie, Client};
 use scraper::error::SelectorErrorKind;
 use tokio::{
     fs::{self, File},
     io::AsyncWriteExt as _,
+    join,
+    sync::mpsc,
 };
 use url::Url;
 
@@ -37,6 +43,7 @@ enum MainError {
     Io(#[from] io::Error),
     Report(#[from] report::Error),
     Xlsx(#[from] calamine::XlsxError),
+    #[allow(dead_code)]
     ValueMissing(&'static str),
     Utf8(#[from] FromUtf8Error),
     Selector(#[from] SelectorErrorKind<'static>),
@@ -165,49 +172,122 @@ async fn id_to_ean(cookie_store: &CookieStore, id: u32) -> Result<String, MainEr
     Ok(ean)
 }
 
-async fn id_to_ean_date_range(
-    cookie_store: &CookieStore,
-    id: u32,
-) -> Result<(String, chrono::NaiveDate, chrono::NaiveDate), MainError> {
-    let page = cookie_store
-        .client()
-        .get(format!(
-            "https://www.dbenergie.nl/Connections/Edit/Index/{id}"
-        ))
-        .send()
-        .await?
-        .bytes()
-        .await?
-        .to_vec();
-    let page = scraper::Html::parse_document(&String::from_utf8(page)?);
+async fn load_ids(
+    eans: Vec<String>,
+    id_tx: mpsc::Sender<(String, u32)>,
+    cookie_store: CookieStore,
+    cookies: Arc<cookie::Jar>,
+) {
+    let mut sleep_time = Duration::from_micros(1);
+    for ean in eans {
+        loop {
+            sleep_time *= 2;
+            eprintln!("{} seconds to load ids", sleep_time.as_secs_f64());
+            // Retrieve the id of the meter
+            let Ok(meter_id) = ean_to_id(&cookie_store, &cookies, &ean).await else {
+                tokio::time::sleep(sleep_time).await;
+                continue;
+            };
+            let Some(meter_id) = meter_id.split('/').last() else {
+                eprintln!("No meter_id found");
+                tokio::time::sleep(sleep_time).await;
+                continue;
+            };
 
-    let selector = scraper::Selector::parse("#Mod_ean")?;
-    let ean = page
-        .select(&selector)
-        .next()
-        .ok_or(MainError::ValueMissing("No ean code found"))?
-        .attr("value")
-        .ok_or(MainError::ValueMissing("Ean code doesn't have a value"))?
-        .trim()
-        .to_owned();
+            let Ok(meter_id) = meter_id.parse::<u32>() else {
+                eprintln!("meter_id isn't an integer");
+                tokio::time::sleep(sleep_time).await;
+                continue;
+            };
 
-    let selector = scraper::Selector::parse("#statusDataOdaRequest")?;
-    let dates = page
-        .select(&selector)
-        .next()
-        .ok_or(MainError::ValueMissing("No dates section found"))?
-        .attr("value")
-        .ok_or(MainError::ValueMissing(
-            "Dates section doesn't have a value",
-        ))?;
-    let dates = dates
-        .split_whitespace()
-        .filter_map(|date| chrono::NaiveDate::parse_from_str(date, "%d-%m-%Y").ok())
-        .collect::<Vec<_>>();
-    if dates.len() < 2 {
-        return Err(MainError::ValueMissing("Not enough dates found"));
+            let Ok(received_ean) = id_to_ean(&cookie_store, meter_id).await else {
+                eprintln!("Failed to check ean and date range");
+                tokio::time::sleep(sleep_time).await;
+                continue;
+            };
+
+            if received_ean != ean {
+                eprintln!(
+                    "Received ean is not the same as requested ean!\nExpected: {ean}\nReceived: {received_ean}\nId: {meter_id}\n"
+                );
+                tokio::time::sleep(sleep_time).await;
+                continue;
+            }
+
+            println!("{ean}: {meter_id}");
+            while id_tx.send((ean.clone(), meter_id)).await.is_err() {
+                tokio::time::sleep(sleep_time).await;
+            }
+            sleep_time = (sleep_time / 4).max(Duration::from_micros(1));
+            break;
+        }
     }
-    Ok((ean, dates[0], dates[1]))
+}
+
+fn receive_id<T>(rx: &mut mpsc::Receiver<T>, sender_closed: &mut bool) -> Option<T> {
+    if *sender_closed {
+        return None;
+    }
+    match rx.try_recv() {
+        Ok(value) => Some(value),
+        Err(e) => match e {
+            mpsc::error::TryRecvError::Empty => None,
+            mpsc::error::TryRecvError::Disconnected => {
+                *sender_closed = true;
+                None
+            }
+        },
+    }
+}
+
+async fn download_reports(
+    mut ids: Vec<(String, u32)>,
+    cookie_store: &CookieStore,
+    output: &str,
+    mut rx: mpsc::Receiver<(String, u32)>,
+) {
+    let mut i = 0;
+    let mut sender_closed = false;
+    let mut sleep_time = Duration::from_micros(1);
+    loop {
+        tokio::time::sleep(sleep_time).await;
+        while let Some(id) = receive_id(&mut rx, &mut sender_closed) {
+            ids.push(id);
+        }
+        sleep_time *= 2;
+        if i >= ids.len() && !sender_closed {
+            continue;
+        }
+        i %= ids.len();
+
+        let today = chrono::Local::now().date_naive();
+        // Download the latest report
+        let Ok((file_name, report)) = Report::EnergieVerbruikPerUur(
+            ids[i].1,
+            today.with_year(today.year() - 1).unwrap(),
+            chrono::Local::now().date_naive(),
+        )
+        .download_latest_version(cookie_store)
+        .await
+        else {
+            eprintln!("Failed to download report");
+            continue;
+        };
+
+        // Save the file
+        save(
+            cookie_store.client(),
+            output,
+            report,
+            format!("{}_{file_name}", ids[i].0),
+        )
+        .await
+        .ok();
+
+        eprintln!("Saved the report");
+        i += 1;
+        sleep_time = (sleep_time / 4).min(Duration::from_micros(1));
+    }
 }
 
 #[tokio::main]
@@ -216,69 +296,23 @@ async fn main() {
     let args = Args::parse();
 
     // Log in to receive a cookie
+    eprintln!("Logging in");
     let (cookie_store, cookies) = CookieStore::login(&args.mail, &args.password)
         .await
         .expect("Login failed");
 
+    let (tx, rx) = mpsc::channel(10);
+
+    eprintln!("Reading eans");
     let eans = read_eans(&cookie_store)
         .await
         .expect("Failed to read ean codes");
 
-    let mut ids = Vec::with_capacity(eans.len());
+    let ids = Vec::with_capacity(eans.len());
 
-    for ean in &eans {
-        loop {
-            // Retrieve the id of the meter
-            let Ok(meter_id) = ean_to_id(&cookie_store, &cookies, ean).await else {
-                continue;
-            };
-            let Some(meter_id) = meter_id.split('/').last() else {
-                println!("No meter_id found");
-                continue;
-            };
-
-            let Ok(meter_id) = meter_id.parse::<u32>() else {
-                println!("meter_id isn't an integer");
-                continue;
-            };
-
-            let Ok(received_ean) = id_to_ean(&cookie_store, meter_id).await else {
-                println!("Failed to check ean and date range");
-                continue;
-            };
-
-            if &received_ean != ean {
-                println!(
-                "Received ean is not the same as requested ean: {ean} {received_ean} {meter_id}"
-            );
-                continue;
-            }
-
-            println!("{ean}: {meter_id}");
-            ids.push(meter_id);
-            break;
-        }
-    }
-
-    loop {
-        tokio::time::sleep(Duration::from_secs(1)).await;
-        let today = chrono::Local::now().date_naive();
-        // Download the latest report
-        let Ok((file_name, report)) = Report::EnergieVerbruikPerUur(
-            ids.clone(),
-            today.with_year(today.year() - 1).unwrap(),
-            chrono::Local::now().date_naive(),
-        )
-        .download_latest_version(&cookie_store)
-        .await
-        else {
-            println!("Failed to download report");
-            continue;
-        };
-
-        // Save the file
-        save(cookie_store.client(), &args.output, report, file_name)
-            .await
-            .ok();
-    }
+    eprintln!("Loading ids and reports");
+    let id_loader = tokio::spawn(load_ids(eans, tx, cookie_store.clone(), cookies));
+    let report_loader = download_reports(ids, &cookie_store, &args.output, rx);
+    let (join_result, ()) = join!(id_loader, report_loader);
+    join_result.unwrap();
 }
