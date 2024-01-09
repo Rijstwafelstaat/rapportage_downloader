@@ -1,7 +1,6 @@
 #![warn(clippy::pedantic, clippy::nursery)]
 use std::{
-    fmt::Display, io, path::PathBuf, str::FromStr as _, string::FromUtf8Error, sync::Arc,
-    time::Duration,
+    fmt::Display, io, path::PathBuf, str::FromStr as _, string::FromUtf8Error, time::Duration,
 };
 
 use base64::Engine;
@@ -12,7 +11,7 @@ use rapportage_downloader::{
     login::CookieStore,
     report::{self, Report},
 };
-use reqwest::{cookie, Client};
+use reqwest::Client;
 use scraper::error::SelectorErrorKind;
 use tokio::{
     fs::{self, File},
@@ -115,12 +114,8 @@ async fn read_eans(cookie_store: &CookieStore) -> Result<Vec<String>, MainError>
         .collect())
 }
 
-async fn ean_to_id(
-    cookie_store: &CookieStore,
-    cookies: &cookie::Jar,
-    ean: &str,
-) -> Result<String, MainError> {
-    cookies.add_cookie_str(&format!("PersonalFilter=%7B%22mainPortalId%22%3A1%2C%22portalId%22%3A6%2C%22productId%22%3A%5B1%5D%2C%22statusId%22%3A%5B%5D%2C%22providerId%22%3A0%2C%22gridId%22%3A0%2C%22meterreadingcompanyId%22%3A0%2C%22customerId%22%3A%5B50%5D%2C%22departmentId%22%3A%5B%5D%2C%22gvkvId%22%3A0%2C%22monitoringTypesId%22%3A0%2C%22characteristicId%22%3A0%2C%22consumptionCategoryId%22%3A0%2C%22consumptionTypeId%22%3A%5B%5D%2C%22costplaceId%22%3A0%2C%22energytaxationclusterId%22%3A0%2C%22classificationId%22%3A0%2C%22labelId%22%3A0%2C%22ConnectionTypeId%22%3A0%2C%22meterNumber%22%3A%22%22%2C%22eanSearch%22%3A%22{ean}%22%2C%22meterDeleted%22%3Afalse%2C%22ListMap%22%3Afalse%2C%22pageSize%22%3A15%2C%22pageNumber%22%3A1%2C%22orderBy%22%3A%22%22%2C%22orderDirection%22%3A%22asc%22%7D"), &Url::from_str("https://www.dbenergie.nl/Connections/List/Index")?);
+async fn ean_to_id(cookie_store: &CookieStore, ean: &str) -> Result<String, MainError> {
+    cookie_store.add_cookie_str(&format!("PersonalFilter=%7B%22mainPortalId%22%3A1%2C%22portalId%22%3A6%2C%22productId%22%3A%5B1%5D%2C%22statusId%22%3A%5B%5D%2C%22providerId%22%3A0%2C%22gridId%22%3A0%2C%22meterreadingcompanyId%22%3A0%2C%22customerId%22%3A%5B50%5D%2C%22departmentId%22%3A%5B%5D%2C%22gvkvId%22%3A0%2C%22monitoringTypesId%22%3A0%2C%22characteristicId%22%3A0%2C%22consumptionCategoryId%22%3A0%2C%22consumptionTypeId%22%3A%5B%5D%2C%22costplaceId%22%3A0%2C%22energytaxationclusterId%22%3A0%2C%22classificationId%22%3A0%2C%22labelId%22%3A0%2C%22ConnectionTypeId%22%3A0%2C%22meterNumber%22%3A%22%22%2C%22eanSearch%22%3A%22{ean}%22%2C%22meterDeleted%22%3Afalse%2C%22ListMap%22%3Afalse%2C%22pageSize%22%3A15%2C%22pageNumber%22%3A1%2C%22orderBy%22%3A%22%22%2C%22orderDirection%22%3A%22asc%22%7D"), &Url::from_str("https://www.dbenergie.nl/Connections/List/Index")?);
     let content = String::from_utf8(
         cookie_store
             .client()
@@ -176,7 +171,6 @@ async fn load_ids(
     eans: Vec<String>,
     id_tx: mpsc::Sender<(String, u32)>,
     cookie_store: CookieStore,
-    cookies: Arc<cookie::Jar>,
 ) {
     let mut sleep_time = Duration::from_micros(1);
     for ean in eans {
@@ -184,7 +178,7 @@ async fn load_ids(
             sleep_time *= 2;
             eprintln!("{} seconds to load ids", sleep_time.as_secs_f64());
             // Retrieve the id of the meter
-            let Ok(meter_id) = ean_to_id(&cookie_store, &cookies, &ean).await else {
+            let Ok(meter_id) = ean_to_id(&cookie_store, &ean).await else {
                 tokio::time::sleep(sleep_time).await;
                 continue;
             };
@@ -271,6 +265,7 @@ async fn download_reports(
         .await
         else {
             eprintln!("Failed to download report");
+            cookie_store.redo_login().await.ok();
             continue;
         };
 
@@ -297,7 +292,7 @@ async fn main() {
 
     // Log in to receive a cookie
     eprintln!("Logging in");
-    let (cookie_store, cookies) = CookieStore::login(&args.mail, &args.password)
+    let cookie_store = CookieStore::login(args.mail, args.password)
         .await
         .expect("Login failed");
 
@@ -311,7 +306,7 @@ async fn main() {
     let ids = Vec::with_capacity(eans.len());
 
     eprintln!("Loading ids and reports");
-    let id_loader = tokio::spawn(load_ids(eans, tx, cookie_store.clone(), cookies));
+    let id_loader = tokio::spawn(load_ids(eans, tx, cookie_store.clone()));
     let report_loader = download_reports(ids, &cookie_store, &args.output, rx);
     let (join_result, ()) = join!(id_loader, report_loader);
     join_result.unwrap();

@@ -20,7 +20,7 @@ async fn main() {
     let args = Args::parse();
 
     // Login to DB Energie
-    let (cookie_store, _) = CookieStore::login(&args.mail, &args.password)
+    let cookie_store = CookieStore::login(args.mail, args.password)
         .await
         .expect("Login failed");
 
