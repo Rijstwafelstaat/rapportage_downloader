@@ -194,7 +194,7 @@ async fn load_id(ean: &str, cookie_store: &CookieStore) -> Result<String, MainEr
         .ok_or(MainError::ValueMissing("No meter id for ean"))?
         .to_owned();
     let received_ean = id_to_ean(cookie_store, &meter_id).await?;
-    if received_ean != meter_id {
+    if received_ean != ean {
         return Err(MainError::IncorrectIdOrEan {
             id: meter_id,
             ean: received_ean,
