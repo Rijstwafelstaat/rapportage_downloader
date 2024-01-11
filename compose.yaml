@@ -8,10 +8,19 @@
 # database or a cache. For examples, see the Awesome Compose repository:
 # https://github.com/docker/awesome-compose
 services:
-  app:
+  webscraper:
     build:
-      context: .
-      target: final
+      hostname: rapportage_downloader
+      build: rapportage_downloader
+      restart: always
+      volumes:
+        - ./src
+      networks:
+        - litNet
+      depends_on:
+        - data_verwerken
+        - data_link
+      
     # If your application exposes a port, uncomment the following lines and change
     # the port numbers as needed. The first number is the host port and the second
     # is the port inside the container.

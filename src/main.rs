@@ -142,7 +142,7 @@ async fn ean_to_id(cookie_store: &CookieStore, ean: &str) -> Result<String, Main
         .to_owned())
 }
 
-async fn id_to_ean(cookie_store: &CookieStore, id: u32) -> Result<String, MainError> {
+async fn id_to_ean(cookie_store: &CookieStore, id: &str) -> Result<String, MainError> {
     let page = cookie_store
         .client()
         .get(format!(
@@ -169,49 +169,59 @@ async fn id_to_ean(cookie_store: &CookieStore, id: u32) -> Result<String, MainEr
 
 async fn load_ids(
     eans: Vec<String>,
-    id_tx: mpsc::Sender<(String, u32)>,
+    id_tx: mpsc::Sender<(String, String)>,
     cookie_store: CookieStore,
 ) {
     let mut sleep_time = Duration::from_micros(1);
     for ean in eans {
         loop {
+            // Double the sleep time
             sleep_time *= 2;
             eprintln!("{} seconds to load ids", sleep_time.as_secs_f64());
+
             // Retrieve the id of the meter
             let Ok(meter_id) = ean_to_id(&cookie_store, &ean).await else {
+                eprintln!("Failed to checked id for ean {ean}.");
                 tokio::time::sleep(sleep_time).await;
                 continue;
             };
+
+            // Take the id
             let Some(meter_id) = meter_id.split('/').last() else {
-                eprintln!("No meter_id found");
+                eprintln!("No meter_id found for ean {ean}");
                 tokio::time::sleep(sleep_time).await;
                 continue;
             };
 
-            let Ok(meter_id) = meter_id.parse::<u32>() else {
-                eprintln!("meter_id isn't an integer");
-                tokio::time::sleep(sleep_time).await;
-                continue;
-            };
-
+            // Check the ean corresponding to the id
             let Ok(received_ean) = id_to_ean(&cookie_store, meter_id).await else {
-                eprintln!("Failed to check ean and date range");
-                tokio::time::sleep(sleep_time).await;
-                continue;
-            };
-
-            if received_ean != ean {
                 eprintln!(
-                    "Received ean is not the same as requested ean!\nExpected: {ean}\nReceived: {received_ean}\nId: {meter_id}\n"
+                    "Failed to check ean and date range for id {meter_id} received for ean {ean}"
                 );
                 tokio::time::sleep(sleep_time).await;
                 continue;
+            };
+
+            // Make sure the received ean is equal to the expected ean
+            if received_ean != ean {
+                eprintln!("Received ean {received_ean} is not the same as requested ean {ean}!");
+                tokio::time::sleep(sleep_time).await;
+                continue;
             }
 
+            // Display the ean and its id
             println!("{ean}: {meter_id}");
-            while id_tx.send((ean.clone(), meter_id)).await.is_err() {
-                tokio::time::sleep(sleep_time).await;
+
+            // Send the ean and id, this will only fail if the report downloader stopped
+            if id_tx
+                .send((ean.clone(), meter_id.to_owned()))
+                .await
+                .is_err()
+            {
+                break;
             }
+
+            // Decrease the sleep time
             sleep_time = (sleep_time / 4).max(Duration::from_micros(1));
             break;
         }
@@ -235,53 +245,73 @@ fn receive_id<T>(rx: &mut mpsc::Receiver<T>, sender_closed: &mut bool) -> Option
 }
 
 async fn download_reports(
-    mut ids: Vec<(String, u32)>,
+    mut ids: Vec<(String, String)>,
     cookie_store: &CookieStore,
     output: &str,
-    mut rx: mpsc::Receiver<(String, u32)>,
+    mut rx: mpsc::Receiver<(String, String)>,
 ) {
     let mut i = 0;
     let mut sender_closed = false;
-    let mut sleep_time = Duration::from_micros(1);
+    let mut sleep_time = Duration::from_millis(1);
     loop {
         tokio::time::sleep(sleep_time).await;
+
+        // Add all known id - ean matches to the list of received eans
         while let Some(id) = receive_id(&mut rx, &mut sender_closed) {
             ids.push(id);
         }
+
+        // Double the sleep time for the next iteration
         sleep_time *= 2;
+        eprintln!("{} seconds to download reports", sleep_time.as_secs_f64());
+
+        // Wait if i reaches the number of ids and not all ids have been received yet
         if i >= ids.len() && !sender_closed {
             continue;
         }
+
+        // Reset i to 0, if it reaches the current number of ids
         i %= ids.len();
 
+        // Load the current date
         let today = chrono::Local::now().date_naive();
+
         // Download the latest report
-        let Ok((file_name, report)) = Report::EnergieVerbruikPerUur(
-            ids[i].1,
+        let (file_name, report) = match Report::EnergieVerbruikPerUur(
+            &ids[i].1,
             today.with_year(today.year() - 1).unwrap(),
             chrono::Local::now().date_naive(),
         )
         .download_latest_version(cookie_store)
         .await
-        else {
-            eprintln!("Failed to download report");
-            cookie_store.redo_login().await.ok();
-            continue;
+        {
+            Ok((file_name, report)) => (file_name, report),
+            Err(e) => {
+                eprintln!("Failed to download report for ean {}\n{e:?}\n", ids[i].0);
+                cookie_store.redo_login().await.ok();
+                continue;
+            }
         };
 
         // Save the file
-        save(
+        if let Err(e) = save(
             cookie_store.client(),
             output,
             report,
             format!("{}_{file_name}", ids[i].0),
         )
         .await
-        .ok();
+        {
+            eprintln!("Failed to save report for ean {}\n{e:?}\n", ids[i].0);
+            continue;
+        };
 
-        eprintln!("Saved the report");
+        // Tell the user, the report has been saved
+        eprintln!("Saved the report for ean {}", ids[i].0);
+
+        // Continue to the next report and decrease the sleep time
         i += 1;
-        sleep_time = (sleep_time / 4).min(Duration::from_micros(1));
+        sleep_time = (sleep_time / 4).max(Duration::from_millis(1));
     }
 }
 
@@ -296,18 +326,24 @@ async fn main() {
         .await
         .expect("Login failed");
 
+    // Create a channel
     let (tx, rx) = mpsc::channel(10);
 
+    // Download the eans
     eprintln!("Reading eans");
     let eans = read_eans(&cookie_store)
         .await
         .expect("Failed to read ean codes");
 
+    // Create a vector for the ids
     let ids = Vec::with_capacity(eans.len());
 
+    // Load the ids and download and store the reports
     eprintln!("Loading ids and reports");
     let id_loader = tokio::spawn(load_ids(eans, tx, cookie_store.clone()));
     let report_loader = download_reports(ids, &cookie_store, &args.output, rx);
+
+    // Wait for the loading of ids and downloading of reports is done.
     let (join_result, ()) = join!(id_loader, report_loader);
     join_result.unwrap();
 }
