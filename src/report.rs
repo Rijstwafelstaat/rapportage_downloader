@@ -32,7 +32,7 @@ impl Display for Error {
 
 /// The available report types
 #[derive(Debug, Clone)]
-pub enum Report<'a> {
+pub enum Report {
     /// Energie aansluitingenlijst
     Aansluitinglijst,
 
@@ -45,7 +45,7 @@ pub enum Report<'a> {
     /// Datakwaliteits rapportage
     Datakwaliteit,
 
-    EnergieVerbruikPerUur(&'a str, chrono::NaiveDate, chrono::NaiveDate),
+    EnergieVerbruikPerUur(u32, chrono::NaiveDate, chrono::NaiveDate),
 
     /// Gebouwen
     Gebouwen,
@@ -69,7 +69,7 @@ pub enum Report<'a> {
     Verbruik,
 }
 
-impl<'a> Report<'a> {
+impl Report {
     /// Returns the corresponding url for a report
     #[must_use]
     pub fn url(&self) -> &str {
