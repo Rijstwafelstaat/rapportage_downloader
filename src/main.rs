@@ -1,13 +1,14 @@
-#![warn(clippy::pedantic, clippy::nursery)]
 use std::{
-    fmt::Display, io, path::PathBuf, str::FromStr as _, string::FromUtf8Error, time::Duration,
+    fmt::Display, io, num::ParseIntError, path::PathBuf, str::FromStr as _, string::FromUtf8Error,
+    time::Duration,
 };
 
-use base64::Engine;
 use calamine::{Reader, Xlsx};
 use chrono::Datelike;
 use clap::Parser;
 use rapportage_downloader::{
+    ean::Ean,
+    id::Id,
     login::CookieStore,
     report::{self, Report},
 };
@@ -19,7 +20,6 @@ use tokio::{
     join,
     sync::mpsc,
 };
-use url::Url;
 
 #[derive(Parser)]
 pub struct Args {
@@ -47,6 +47,7 @@ enum MainError {
     Utf8(#[from] FromUtf8Error),
     Selector(#[from] SelectorErrorKind<'static>),
     UrlParse(#[from] url::ParseError),
+    ParseInt(#[from] ParseIntError),
 }
 
 impl Display for MainError {
@@ -87,7 +88,7 @@ async fn save(
     Ok(())
 }
 
-async fn read_eans(cookie_store: &CookieStore) -> Result<Vec<String>, MainError> {
+async fn read_eans(cookie_store: &CookieStore) -> Result<Vec<Ean>, MainError> {
     let (file_name, aansluitingen) = Report::Aansluitinglijst
         .download_latest_version(cookie_store)
         .await?;
@@ -110,66 +111,13 @@ async fn read_eans(cookie_store: &CookieStore) -> Result<Vec<String>, MainError>
         .map(|pair| pair.0)
         .collect::<Vec<_>>();
     Ok(rows
-        .filter_map(|row| row.get(index[0]).map(calamine::DataType::to_string))
+        .filter_map(|row| row.get(index[0]).map(|value| Ean::from(value.to_string())))
         .collect())
 }
 
-async fn ean_to_id(cookie_store: &CookieStore, ean: &str) -> Result<String, MainError> {
-    cookie_store.add_cookie_str(&format!("PersonalFilter=%7B%22mainPortalId%22%3A1%2C%22portalId%22%3A6%2C%22productId%22%3A%5B1%5D%2C%22statusId%22%3A%5B%5D%2C%22providerId%22%3A0%2C%22gridId%22%3A0%2C%22meterreadingcompanyId%22%3A0%2C%22customerId%22%3A%5B50%5D%2C%22departmentId%22%3A%5B%5D%2C%22gvkvId%22%3A0%2C%22monitoringTypesId%22%3A0%2C%22characteristicId%22%3A0%2C%22consumptionCategoryId%22%3A0%2C%22consumptionTypeId%22%3A%5B%5D%2C%22costplaceId%22%3A0%2C%22energytaxationclusterId%22%3A0%2C%22classificationId%22%3A0%2C%22labelId%22%3A0%2C%22ConnectionTypeId%22%3A0%2C%22meterNumber%22%3A%22%22%2C%22eanSearch%22%3A%22{ean}%22%2C%22meterDeleted%22%3Afalse%2C%22ListMap%22%3Afalse%2C%22pageSize%22%3A15%2C%22pageNumber%22%3A1%2C%22orderBy%22%3A%22%22%2C%22orderDirection%22%3A%22asc%22%7D"), &Url::from_str("https://www.dbenergie.nl/Connections/List/Index")?);
-    let content = String::from_utf8(
-        cookie_store
-            .client()
-            .get("https://www.dbenergie.nl/Connections/List/Index")
-            .header(
-                "request",
-                base64::engine::general_purpose::STANDARD.encode("false"),
-            )
-            .send()
-            .await?
-            .bytes()
-            .await?
-            .into_iter()
-            .collect::<Vec<u8>>(),
-    )?;
-    let page = scraper::Html::parse_document(&content);
-    let selector = scraper::Selector::parse("a.list-row-visible")?;
-    Ok(page
-        .select(&selector)
-        .next()
-        .ok_or(MainError::ValueMissing("Failed to find connection"))?
-        .attr("href")
-        .ok_or(MainError::ValueMissing("Connection doesn't contain a link"))?
-        .to_owned())
-}
-
-async fn id_to_ean(cookie_store: &CookieStore, id: u32) -> Result<String, MainError> {
-    let page = cookie_store
-        .client()
-        .get(format!(
-            "https://www.dbenergie.nl/Connections/Edit/Index/{id}"
-        ))
-        .send()
-        .await?
-        .bytes()
-        .await?
-        .to_vec();
-    let page = scraper::Html::parse_document(&String::from_utf8(page)?);
-
-    let selector = scraper::Selector::parse("#Mod_ean")?;
-    let ean = page
-        .select(&selector)
-        .next()
-        .ok_or(MainError::ValueMissing("No ean code found"))?
-        .attr("value")
-        .ok_or(MainError::ValueMissing("Ean code doesn't have a value"))?
-        .trim()
-        .to_owned();
-    Ok(ean)
-}
-
-async fn load_ids(
-    eans: Vec<String>,
-    id_tx: mpsc::Sender<(String, u32)>,
+async fn load_ids<I: IntoIterator<Item = Ean> + std::marker::Send>(
+    eans: I,
+    id_tx: mpsc::Sender<(Ean, Id)>,
     cookie_store: CookieStore,
 ) {
     let mut sleep_time = Duration::from_micros(1);
@@ -178,23 +126,12 @@ async fn load_ids(
             sleep_time *= 2;
             eprintln!("{} seconds to load ids", sleep_time.as_secs_f64());
             // Retrieve the id of the meter
-            let Ok(meter_id) = ean_to_id(&cookie_store, &ean).await else {
-                tokio::time::sleep(sleep_time).await;
-                continue;
-            };
-            let Some(meter_id) = meter_id.split('/').last() else {
-                eprintln!("No meter_id found");
-                tokio::time::sleep(sleep_time).await;
+
+            let Ok(meter_id) = Id::from_ean(&cookie_store, &ean).await else {
                 continue;
             };
 
-            let Ok(meter_id) = meter_id.parse::<u32>() else {
-                eprintln!("meter_id isn't an integer");
-                tokio::time::sleep(sleep_time).await;
-                continue;
-            };
-
-            let Ok(received_ean) = id_to_ean(&cookie_store, meter_id).await else {
+            let Ok(received_ean) = Ean::from_id(&cookie_store, meter_id).await else {
                 eprintln!("Failed to check ean and date range");
                 tokio::time::sleep(sleep_time).await;
                 continue;
@@ -235,10 +172,10 @@ fn receive_id<T>(rx: &mut mpsc::Receiver<T>, sender_closed: &mut bool) -> Option
 }
 
 async fn download_reports(
-    mut ids: Vec<(String, u32)>,
+    mut ids: Vec<(Ean, Id)>,
     cookie_store: &CookieStore,
     output: &str,
-    mut rx: mpsc::Receiver<(String, u32)>,
+    mut rx: mpsc::Receiver<(Ean, Id)>,
 ) {
     let mut i = 0;
     let mut sender_closed = false;
@@ -259,7 +196,7 @@ async fn download_reports(
         let Ok((file_name, report)) = Report::EnergieVerbruikPerUur(
             ids[i].1,
             today.with_year(today.year() - 1).unwrap(),
-            chrono::Local::now().date_naive(),
+            today,
         )
         .download_latest_version(cookie_store)
         .await
