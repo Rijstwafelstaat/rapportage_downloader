@@ -1,7 +1,8 @@
 # Rapportage Downloader
 Deze applicatie haalt de nieuwste versie van een rapport op. Deze applicatie draait alleen in de terminal.
 ## Dependencies
-[Rust](https://www.rust-lang.org/tools/install)
+ - [Rust](https://www.rust-lang.org/tools/install) 1.70 of nieuwer
+ - [Docker](https://www.docker.com/) (Optional)
 ## Compileren
 Je kan de applicatie compileren met `cargo build` of `cargo run` met eventueel de `--release` flag, afhankelijk van of je de debug of geoptimaliseerde versie wilt. Het verschil tuseen `cargo build` en `cargo run` is dat je bij `cargo run` de binary direct runt. Aangezien het verplicht is om direct de nodige informatie als argument te geven, moet je `--` tussen het run command en de argumenten zetten.
 ## Runnen
