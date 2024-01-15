@@ -1,4 +1,4 @@
-use std::str::Utf8Error;
+use std::{str::Utf8Error, sync::Arc};
 
 use reqwest::Client;
 use scraper::error::SelectorErrorKind;
@@ -19,8 +19,12 @@ impl std::fmt::Display for Error {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct CookieStore {
     client: Client,
+    jar: Arc<reqwest::cookie::Jar>,
+    mail: String,
+    password: String,
 }
 
 impl CookieStore {
@@ -33,7 +37,7 @@ impl CookieStore {
             .await?;
 
         // Read the body
-        let login_page = response.bytes().await?.into_iter().collect::<Vec<u8>>();
+        let login_page = response.bytes().await?.to_vec();
 
         // Convert it to &str
         let login_page = core::str::from_utf8(&login_page)?;
@@ -59,30 +63,50 @@ impl CookieStore {
     ///
     /// # Errors
     /// Returns an error if the verification token couldn't be retrieved or the login form couldn't be send.
-    pub async fn login(mail: &str, password: &str) -> Result<Self, Error> {
-        let client = Client::builder().cookie_store(true).build()?;
+    pub async fn login(mail: String, password: String) -> Result<Self, Error> {
+        let jar = Arc::new(reqwest::cookie::Jar::default());
+        let client = Client::builder().cookie_provider(jar.clone()).build()?;
 
+        let client = Self {
+            client,
+            jar,
+            mail,
+            password,
+        };
+        client.inner_login().await?;
+        Ok(client)
+    }
+
+    async fn inner_login(&self) -> Result<(), Error> {
         // Create the login data
         let login_data = [
-            ("user[emailAddress]", mail),
-            ("user[passWord]", password),
+            ("user[emailAddress]", &self.mail),
+            ("user[passWord]", &self.password),
             (
                 "__RequestVerificationToken",
-                &Self::get_verification_token(&client).await?,
+                &Self::get_verification_token(&self.client).await?,
             ),
         ];
 
         // Send it to the server to retrieve the cookies
-        client
+        self.client
             .post("https://www.dbenergie.nl/Home/Login")
             .form(&login_data)
             .send()
             .await?;
-        Ok(Self { client })
+        Ok(())
+    }
+
+    pub async fn redo_login(&self) -> Result<(), Error> {
+        self.inner_login().await
     }
 
     #[allow(clippy::must_use_candidate)]
     pub const fn client(&self) -> &Client {
         &self.client
+    }
+
+    pub fn add_cookie_str(&self, cookie: &str, url: &url::Url) {
+        self.jar.add_cookie_str(cookie, url);
     }
 }
