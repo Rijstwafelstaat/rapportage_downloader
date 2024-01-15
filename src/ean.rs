@@ -44,6 +44,7 @@ impl Display for Ean {
 
 impl Ean {
     pub async fn from_id(cookie_store: &CookieStore, id: Id) -> Result<Ean, Error> {
+        // Download the page for the id
         let page = cookie_store
             .client()
             .get(format!(
@@ -54,9 +55,14 @@ impl Ean {
             .bytes()
             .await?
             .to_vec();
+
+        // Parse the page
         let page = scraper::Html::parse_document(&String::from_utf8(page)?);
 
+        // Create a selector for the ean
         let selector = scraper::Selector::parse("#Mod_ean")?;
+
+        // Take the ean
         let ean = page
             .select(&selector)
             .next()
@@ -65,6 +71,12 @@ impl Ean {
             .ok_or(Error::ValueMissing("Ean code doesn't have a value"))?
             .trim()
             .to_owned();
+
+        // Turn the ean
         Ok(ean.into())
+    }
+
+    pub fn value(&self) -> &str {
+        &self.0
     }
 }

@@ -22,6 +22,7 @@ pub enum Error {
     KeyNotFound(&'static str),
     ValueNotAString,
     Io(#[from] std_io::Error),
+    NotOk(reqwest::StatusCode, &'static str),
 }
 
 impl Display for Error {
@@ -139,6 +140,14 @@ impl Report {
         // Send the request
         let response = client.execute(request).await?;
 
+        // Make sure the request was successfull
+        if response.status() != reqwest::StatusCode::OK {
+            return Err(Error::NotOk(
+                response.status(),
+                "Failed to request latest version",
+            ));
+        }
+
         // Turn the response body (payload) into a string
         let body = String::from_utf8(response.bytes().await?.into_iter().collect::<Vec<u8>>())?;
 
@@ -183,8 +192,12 @@ impl Report {
             .send()
             .await?;
 
+        // Check whether the request was successfull
         if response.status() != reqwest::StatusCode::OK {
-            Ok(vec![])
+            Err(Error::NotOk(
+                response.status(),
+                "Failed to download requested version",
+            ))
         } else {
             Ok(response.bytes().await?.to_vec())
         }
