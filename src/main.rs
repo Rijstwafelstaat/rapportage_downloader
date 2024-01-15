@@ -96,7 +96,7 @@ async fn read_eans(cookie_store: &CookieStore) -> Result<Vec<Ean>, MainError> {
     // Open the list
     let mut workbook: Xlsx<_> = calamine::open_workbook(file_name)?;
     let range = workbook.worksheet_range("Lijst_Export")?;
-    let mut rows = range.rows().take(32);
+    let mut rows = range.rows();
 
     // Take the first row, only store the ean code and status
     let columns = rows
